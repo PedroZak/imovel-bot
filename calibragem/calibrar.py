@@ -17,7 +17,7 @@ O que faz:
      "distorções" que interessam ao objetivo do bot.
   4. Escreve referencias_calibradas.yaml (nunca edita config.yaml
      diretamente — preserva os comentários/curadoria manual).
-  5. Manda um resumo para o Telegram (canal 'mercado'), se configurado.
+  5. Loga um resumo (bairros atualizados + divergências) no console.
 
 Não precisa ficar bonito — é um script administrativo, roda sozinho.
 """
@@ -33,7 +33,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from calibragem import atlas
 from utils import historico
-from notifier import telegram
 
 logging.basicConfig(
     level=logging.INFO,
@@ -143,32 +142,25 @@ def escrever_referencias(calibrado: dict, divergencias: list[dict], path: str = 
     logger.info(f"Escrito: {path}")
 
 
-def notificar_resumo(cfg: dict, calibrado: dict, divergencias: list[dict]):
+def logar_resumo(calibrado: dict, divergencias: list[dict]):
     total_bairros = sum(len(b) for b in calibrado.values())
     if total_bairros == 0:
-        logger.info("Nada para notificar — nenhum bairro calibrado nesta rodada")
+        logger.info("Nenhum bairro calibrado nesta rodada")
         return
 
-    linhas = [f"🔧 <b>Calibragem mensal — {datetime.now().strftime('%d/%m/%Y')}</b>\n"]
-    linhas.append(f"{total_bairros} bairros atualizados.\n")
+    logger.info(f"🔧 Calibragem — {total_bairros} bairro(s) atualizado(s)")
 
     if divergencias:
-        linhas.append(f"⚠️ <b>{len(divergencias)} divergência(s) ≥{int(TOLERANCIA_ALERTA*100)}%:</b>")
+        logger.info(f"⚠️ {len(divergencias)} divergência(s) ≥{int(TOLERANCIA_ALERTA*100)}%:")
         for d in divergencias:
             sinal = "📈" if d["diff_pct"] > 0 else "📉"
-            linhas.append(
-                f"{sinal} {d['bairro']} ({d['regiao']}): "
+            logger.info(
+                f"  {sinal} {d['bairro']} ({d['regiao']}): "
                 f"R${d['valor_config']:,.0f} → R${d['valor_novo']:,.0f} "
                 f"({d['diff_pct']:+.1f}%, fonte: {d['fonte']})"
             )
     else:
-        linhas.append("Sem divergências relevantes — referências seguem estáveis.")
-
-    texto = "\n".join(linhas)
-    ok = telegram.enviar_texto(cfg, "mercado", texto)
-    if not ok:
-        logger.warning("Falha ao enviar resumo de calibragem pelo Telegram "
-                        "(token/canal pode não estar configurado neste ambiente)")
+        logger.info("Sem divergências relevantes — referências seguem estáveis.")
 
 
 def main():
@@ -192,11 +184,7 @@ def main():
 
     divergencias = comparar_e_sinalizar(cfg, calibrado)
     escrever_referencias(calibrado, divergencias)
-
-    try:
-        notificar_resumo(cfg, calibrado, divergencias)
-    except Exception as e:
-        logger.warning(f"Notificação de calibragem falhou (não crítico): {e}")
+    logar_resumo(calibrado, divergencias)
 
     logger.info("✅ Calibragem concluída")
 

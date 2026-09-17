@@ -2,7 +2,7 @@
 scorers/base.py
 ───────────────
 Tipos de retorno compartilhados pelos scorers.
-Separados aqui para que notifier/telegram.py importe sem circular.
+Separados aqui para que notifier/dashboard.py importe sem circular.
 """
 
 from dataclasses import dataclass, field

@@ -1,33 +1,22 @@
 """
 main.py
 ───────
-Orquestrador principal do imovel-bot.
+Orquestrador principal do imovel-bot. Dashboard-only — sem Telegram
+(removido por pedido do usuário): cada rodada só coleta, pontua e
+atualiza data/dashboard.html, nunca envia nada por conta própria.
 
 Uso:
   python main.py                → roda Tier 1 (mercado) — padrão
   python main.py --tier 1       → idem, explícito
-  python main.py --tier 3       → Tier 3 (leilão) — ON HOLD
-  python main.py --dry-run      → sem envio Telegram (só loga)
-
-Tier 3 está em hold: não roda por padrão nem no cron agendado.
-Só executa se chamado explicitamente com --tier 3.
-
-Secrets: o config.yaml tem placeholders. Em produção (GitHub
-Actions), as variáveis de ambiente abaixo sobrescrevem os
-valores do arquivo automaticamente via _aplicar_env():
-  TELEGRAM_TOKEN
-  TELEGRAM_CHANNEL_MERCADO
-  TELEGRAM_CHANNEL_LEILAO
+  python main.py --tier 3       → Tier 3 (leilão)
 """
 
-import argparse, copy, logging, os, sys, yaml
-from typing import Optional
+import argparse, copy, logging, os, yaml
 
 from scrapers  import olx, zap, quintoandar
 from scorers   import mercado as scorer_mercado
-from notifier  import telegram, dedup, dashboard
+from notifier  import dashboard
 from utils     import historico
-from utils.bairro import resolver_bairro, texto_localizacao
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,11 +29,10 @@ REFERENCIAS_CALIBRADAS_PATH = "referencias_calibradas.yaml"
 
 # ── Config ────────────────────────────────────────────────────
 
-def carregar_config(path: str = "config.yaml", dry_run: bool = False) -> dict:
+def carregar_config(path: str = "config.yaml") -> dict:
     with open(path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
-    cfg = _mesclar_calibragem(cfg)
-    return _aplicar_env(cfg, dry_run)
+    return _mesclar_calibragem(cfg)
 
 
 def _mesclar_calibragem(cfg: dict, path: str = REFERENCIAS_CALIBRADAS_PATH) -> dict:
@@ -90,62 +78,9 @@ def _mesclar_calibragem(cfg: dict, path: str = REFERENCIAS_CALIBRADAS_PATH) -> d
     return cfg
 
 
-def _aplicar_env(cfg: dict, dry_run: bool = False) -> dict:
-    """
-    Sobrescreve valores do config.yaml com variáveis de ambiente.
-    Permite usar GitHub Secrets sem expor tokens no repositório.
-    Valores de env têm prioridade absoluta sobre o arquivo.
-    """
-    mapa = {
-        "TELEGRAM_TOKEN":           ("telegram", "token"),
-        "TELEGRAM_CHANNEL_MERCADO": ("telegram", "channels", "mercado"),
-        "TELEGRAM_CHANNEL_LEILAO":  ("telegram", "channels", "leilao"),
-    }
-    for env_key, cfg_path in mapa.items():
-        valor = os.getenv(env_key)
-        if valor:
-            d = cfg
-            for k in cfg_path[:-1]:
-                d = d.setdefault(k, {})
-            d[cfg_path[-1]] = valor
-            logger.debug(f"Config sobrescrito via env: {env_key}")
-
-    _validar_config(cfg, dry_run)
-    return cfg
-
-
-def _validar_config(cfg: dict, dry_run: bool = False):
-    """
-    Falha rápido se configuração obrigatória estiver faltando.
-
-    Em --dry-run nada é enviado pro Telegram, então token/canal não
-    fazem falta — permite rodar o dashboard-only (ex: workflow do
-    GitHub Actions sem enviar_telegram marcado) sem secret nenhum.
-    """
-    if dry_run:
-        return
-
-    erros = []
-    token = cfg.get("telegram", {}).get("token", "")
-    if not token or "SEU_BOT" in token:
-        erros.append(
-            "TELEGRAM_TOKEN não configurado (defina o secret no GitHub "
-            "ou preencha config.yaml localmente)"
-        )
-
-    canais = cfg.get("telegram", {}).get("channels", {})
-    if not canais.get("mercado") or "XXX" in str(canais.get("mercado", "")):
-        erros.append("Canal Telegram 'mercado' não configurado")
-
-    if erros:
-        for e in erros:
-            logger.error(f"Config inválido: {e}")
-        sys.exit(1)
-
-
 # ── Tier 1 — Mercado ─────────────────────────────────────────
 
-def rodar_tier1(cfg: dict, dry_run: bool = False):
+def rodar_tier1(cfg: dict):
     logger.info("═══ TIER 1 — Mercado ═══")
     mc = cfg.get("mercado", {})
     resultados_por_regiao: dict = {}
@@ -156,18 +91,17 @@ def rodar_tier1(cfg: dict, dry_run: bool = False):
             nome = info.get("display_name", chave)
             logger.info(f"--- Região: {nome} ---")
             cfg_regiao = _construir_config_regiao(cfg, info)
-            enviados, aprovados = _coletar_pontuar_notificar(cfg_regiao, dry_run, label=nome)
-            total += enviados
+            aprovados = _coletar_e_pontuar(cfg_regiao, label=nome)
+            total += len(aprovados)
             resultados_por_regiao[nome] = aprovados
-        logger.info(f"Tier 1 total (todas as regiões): {total} notificações")
+        logger.info(f"Tier 1 total (todas as regiões): {total} aprovados")
     else:
         nome = cfg.get("mercado", {}).get("cidade", "Resultados")
-        _, aprovados = _coletar_pontuar_notificar(cfg, dry_run)
-        resultados_por_regiao[nome] = aprovados
+        resultados_por_regiao[nome] = _coletar_e_pontuar(cfg)
 
     # Dashboard local (uma aba por cidade, cards por aprovado) — nunca
-    # pode derrubar a rodada de produção (roda sozinha 3x/dia via
-    # GitHub Actions); falha aqui é só um warning, não interrompe nada.
+    # pode derrubar a rodada de produção; falha aqui é só um warning,
+    # não interrompe nada.
     try:
         caminho = dashboard.salvar_e_abrir(resultados_mercado=resultados_por_regiao)
         logger.info(f"📊 Dashboard: {caminho}")
@@ -178,7 +112,7 @@ def rodar_tier1(cfg: dict, dry_run: bool = False):
 def _construir_config_regiao(cfg: dict, info: dict) -> dict:
     """
     Cria uma cópia do config com os parâmetros da região sobrepostos.
-    Mantém tudo mais (telegram, geo, db_path) intacto.
+    Mantém tudo mais (geo, db_path) intacto.
     """
     cfg_regiao = copy.deepcopy(cfg)
     mc = cfg_regiao.setdefault("mercado", {})
@@ -206,17 +140,9 @@ def _viva_real_aplicavel(cfg: dict) -> bool:
     return slug_zap in (None, "sp+sao-paulo")
 
 
-def _coletar_pontuar_notificar(cfg: dict, dry_run: bool, label: str = "") -> tuple:
-    """
-    Coleta OLX+ZAP(+VivaReal), pontua, deduplica e notifica.
-    Retorna (nº de notificações enviadas, lista de ScoreResult aprovados
-    — inclui os que já tinham sido notificados antes, usada pelo
-    dashboard local, que mostra todo aprovado da rodada independente
-    de dedup).
-    """
-    db    = cfg["db_path"]
-    canal = "mercado"
-    refs  = cfg.get("bairros_referencia", {})
+def _coletar_e_pontuar(cfg: dict, label: str = "") -> list:
+    """Coleta OLX+ZAP+QuintoAndar(+VivaReal), pontua e retorna os aprovados."""
+    db = cfg["db_path"]
 
     fontes = [
         ("OLX", olx.buscar, {"cfg": cfg}),
@@ -247,86 +173,15 @@ def _coletar_pontuar_notificar(cfg: dict, dry_run: bool, label: str = "") -> tup
         logger.warning(f"Falha ao gravar histórico de preços (não crítico): {e}")
 
     aprovados = scorer_mercado.filtrar_e_ordenar(listings, cfg)
-
-    enviados = _notificar(
-        aprovados, canal, db, dry_run,
-        fn_envio = lambda r: telegram.enviar_mercado(r, cfg),
-        fn_label = lambda r: f"{r.listing.titulo} | score={r.score}" + (f" | {label}" if label else ""),
-        refs = refs,
-    )
-    return enviados, aprovados
+    logger.info(f"⭐ {len(aprovados)} aprovados" + (f" [{label}]" if label else ""))
+    return aprovados
 
 
-def _notificar(aprovados, canal, db, dry_run, fn_envio, fn_label, refs: Optional[dict] = None) -> int:
-    """
-    Loop de dedup + envio. Retorna quantidade enviada.
+# ── Tier 3 — Leilão ─────────────────────────────────────────────
 
-    `refs` (bairros_referencia) é opcional — só listings de mercado
-    (Tier 1) têm bairro resolvível contra referências conhecidas.
-    Quando presente, aplica uma segunda camada de dedup por
-    fingerprint de conteúdo (bairro+preço+área+quartos) além do
-    (id, fonte) exato — pega repost com ID novo e cross-post entre
-    ZAP/VivaReal, que o dedup por ID sozinho não vê.
-
-    O mesmo repost pode aparecer várias vezes dentro do MESMO lote
-    coletado (visto real: 1 apartamento com 3 IDs diferentes no OLX
-    na mesma rodada) — por isso `fingerprints_do_lote` é checado e
-    atualizado incondicionalmente (inclusive em dry-run), e não só
-    via dedup.marcar_visto_fingerprint (que só grava após envio real,
-    então não pegaria duplicatas dentro do próprio lote).
-    """
-    enviados = 0
-    fingerprints_do_lote: set[str] = set()
-
-    for r in aprovados:
-        listing    = r.listing
-        lid, fonte = listing.id, listing.fonte
-
-        if dedup.ja_visto(db, lid, fonte, canal):
-            logger.debug(f"Já visto (id exato): {lid}"); continue
-
-        fingerprint = None
-        if refs and listing.preco and listing.area:
-            bairro_key  = resolver_bairro(texto_localizacao(listing), refs) or listing.bairro
-            fingerprint = dedup.calcular_fingerprint(
-                bairro_key, listing.preco, listing.area, listing.quartos,
-            )
-            if fingerprint in fingerprints_do_lote:
-                logger.debug(f"Repost dentro do mesmo lote: {lid} ({fonte})")
-                continue
-            if dedup.ja_visto_fingerprint(db, fingerprint, canal):
-                logger.debug(
-                    f"Já visto (mesmo imóvel sob outro id/fonte): {lid} ({fonte})"
-                )
-                continue
-            fingerprints_do_lote.add(fingerprint)
-
-        if dry_run:
-            logger.info(f"[DRY-RUN] {fn_label(r)}")
-            enviados += 1
-        elif fn_envio(r):
-            dedup.marcar_visto(db, lid, fonte, canal)
-            if fingerprint:
-                dedup.marcar_visto_fingerprint(db, fingerprint, canal, lid, fonte)
-            enviados += 1
-
-    logger.info(f"Notificações enviadas ({canal}): {enviados}")
-    return enviados
-
-
-# ── Tier 3 — Leilão (ON HOLD) ──────────────────────────────────
-
-def rodar_tier3(cfg: dict, dry_run: bool = False):
-    """
-    Tier 3 está em hold. Só roda se chamado explicitamente via --tier 3.
-    Usa só requests (scrapers/caixa_leilao.py, scrapers/resale.py) —
-    não precisa de playwright, nenhuma das duas fontes exige JS pro
-    fluxo de busca.
-    """
-    logger.warning(
-        "Tier 3 (leilão) está em hold. Executando mesmo assim "
-        "porque foi chamado explicitamente com --tier 3."
-    )
+def rodar_tier3(cfg: dict):
+    """Usa só requests (scrapers/caixa_leilao.py, scrapers/resale.py) — não precisa de playwright."""
+    logger.info("═══ TIER 3 — Leilão ═══")
     try:
         from scrapers import caixa_leilao, resale
         from scorers  import leilao as scorer_leilao
@@ -334,7 +189,6 @@ def rodar_tier3(cfg: dict, dry_run: bool = False):
         logger.error(f"Tier 3 indisponível — dependência faltando: {e}")
         return
 
-    db, canal = cfg["db_path"], "leilao"
     fontes = [("Caixa", caixa_leilao.buscar), ("Resale", resale.buscar)]
 
     listings = []
@@ -351,11 +205,7 @@ def rodar_tier3(cfg: dict, dry_run: bool = False):
         return
 
     aprovados = scorer_leilao.filtrar_e_ordenar(listings, cfg)
-    _notificar(
-        aprovados, canal, db, dry_run,
-        fn_envio = lambda r: telegram.enviar_leilao(r, cfg),
-        fn_label = lambda r: f"{r.listing.titulo} | score={r.score} | desconto={r.listing.desconto_pct:.1f}%",
-    )
+    logger.info(f"⭐ {len(aprovados)} aprovados")
 
     # Dashboard local (uma aba por fonte — Caixa/Resale). Mesma lógica
     # de segurança do Tier 1: nunca pode derrubar a rodada por causa
@@ -379,19 +229,17 @@ def rodar_tier3(cfg: dict, dry_run: bool = False):
 
 def main():
     parser = argparse.ArgumentParser(description="imovel-bot")
-    parser.add_argument("--tier",    type=int, choices=[1, 3], default=1,
-                         help="Tier a rodar. Padrão: 1 (mercado). Tier 3 (leilão) está em hold.")
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--tier", type=int, choices=[1, 3], default=1,
+                         help="Tier a rodar. Padrão: 1 (mercado).")
     args = parser.parse_args()
 
-    cfg = carregar_config(dry_run=args.dry_run)
-    dedup.inicializar(cfg["db_path"])
+    cfg = carregar_config()
     historico.inicializar(cfg["db_path"])
 
     if args.tier == 1:
-        rodar_tier1(cfg, dry_run=args.dry_run)
+        rodar_tier1(cfg)
     elif args.tier == 3:
-        rodar_tier3(cfg, dry_run=args.dry_run)
+        rodar_tier3(cfg)
 
     logger.info("✅ imovel-bot concluído")
 

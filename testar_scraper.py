@@ -1,9 +1,10 @@
 """
 testar_scraper.py
 ──────────────────
-Testa OLX, ZAP e QuintoAndar — sem Telegram, sem histórico. Não precisa
-de TELEGRAM_TOKEN nem de nenhum secret configurado. Roda o scorer
-(igual o bot de produção) e gera um dashboard HTML local com os aprovados.
+Testa OLX, ZAP e QuintoAndar — sem gravar no histórico de preços (usado
+pela calibragem). Não precisa de nenhum secret configurado. Roda o
+scorer (igual o bot de produção) e gera um dashboard HTML local com
+os aprovados.
 
 Uso:
   python testar_scraper.py                    → testa a região padrão (sp_capital)

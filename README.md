@@ -2,11 +2,13 @@
 
 Robô que varre listagens imobiliárias (OLX, ZAP/VivaReal, QuintoAndar —
 mercado; Caixa e Resale — leilão) em bairros específicos de São Paulo
-capital, Campinas e Piracicaba, pontua cada imóvel de 0–100 a partir de
-preço/m² real (ITBI), yield de aluguel estimado, condomínio, metragem
-e distância a pé do escritório, e notifica os aprovados via Telegram.
-Também gera um dashboard HTML (mobile-friendly, com modo escuro e uma
-calculadora de flip compra-reforma-venda) a cada rodada.
+capital, Campinas e Piracicaba e pontua cada imóvel de 0–100 a partir
+de preço/m² real (ITBI), yield de aluguel estimado, condomínio,
+metragem e distância a pé do escritório. Dashboard-only: nunca envia
+nada por conta própria — cada rodada gera/atualiza um dashboard HTML
+(mobile-friendly, com modo escuro e uma calculadora de flip
+compra-reforma-venda), disponível localmente e, opcionalmente, via
+GitHub Pages.
 
 **Objetivo:** achar distorções de mercado — imóveis genuinamente abaixo
 do valor real, não só "baratos" no sentido de anúncio.
@@ -35,9 +37,7 @@ imovel-bot/
 │   └── flip.py                  ← Calculadora de compra-reforma-venda
 │
 ├── notifier/
-│   ├── telegram.py              ← Envia para canal Mercado / Leilão
-│   ├── dashboard.py             ← Dashboard HTML local (+ botão de controle remoto)
-│   └── dedup.py                 ← SQLite: evita notificação repetida
+│   └── dashboard.py             ← Dashboard HTML local (+ botão de controle remoto)
 │
 ├── utils/
 │   ├── bairro.py                ← Normalização/resolução de bairro (compartilhado)
@@ -50,7 +50,7 @@ imovel-bot/
 │   └── calibrar.py              ← Orquestrador: Atlas + mediana móvel → yaml
 │
 ├── pwa/                         ← manifest/service worker/ícone do dashboard instalável
-├── testar_scraper.py            ← testa scrapers + gera dashboard, sem precisar de Telegram
+├── testar_scraper.py            ← testa scrapers + gera dashboard
 ├── testar.bat                   ← menu local (Windows) pra rodar tudo isso sem terminal
 │
 └── .github/workflows/
@@ -58,57 +58,32 @@ imovel-bot/
     └── calibragem.yml           ← roda mensal, dia 1º
 ```
 
-## Segurança — leia antes de tudo
-
-`config.yaml` deste repositório **só contém placeholders**
-(`SEU_BOT_TOKEN_AQUI`, `-100XXXXXXXXXX`). Nunca substitua esses valores
-por dados reais neste arquivo se ele for para o GitHub ou ficar em uma
-pasta compartilhada (Drive, etc.) — token e IDs de canal reais vão
-**exclusivamente** em:
-
-1. **GitHub Secrets** (produção) — ver seção abaixo
-2. **Variáveis de ambiente locais** (desenvolvimento) — nunca em arquivo salvo
-
 ## Setup
 
-### 1. Telegram
-
-```
-1. @BotFather → /newbot → anotar token
-2. Criar 2 canais privados → adicionar o bot como admin em cada
-3. Pegar os IDs via https://api.telegram.org/bot<TOKEN>/getUpdates
-```
-
-### 2. Rodar local (sem salvar token em arquivo)
+### Rodar local
 
 PowerShell:
 ```powershell
-$env:TELEGRAM_TOKEN="seu_token"
-$env:TELEGRAM_CHANNEL_MERCADO="-100..."
 pip install -r requirements.txt
-python main.py --tier 1 --dry-run
+python main.py --tier 1
 ```
 
-Ou, pra testar só o scraper/score/dashboard sem token nenhum:
+Ou, pra testar só o scraper/score/dashboard região por região:
 ```powershell
 python testar_scraper.py --regiao all
 ```
 
-### 3. GitHub Actions + Pages (rodar e ver resultado sem o PC ligado)
+Ou, no Windows, sem terminal nenhum: `testar.bat` abre um menu.
 
-No repositório: **Settings → Secrets and variables → Actions**, criar:
-- `TELEGRAM_TOKEN`
-- `TELEGRAM_CHANNEL_MERCADO`
-- `TELEGRAM_CHANNEL_LEILAO`
+### GitHub Actions + Pages (rodar e ver resultado sem o PC ligado)
 
-Em **Settings → Pages**, fonte = "GitHub Actions".
+Em **Settings → Pages**, fonte = "GitHub Actions" (já habilitado, se
+você seguiu o setup inicial deste repositório).
 
 O workflow `rodar-bot.yml` só roda sob demanda — sem agendamento fixo,
 pra economizar minutos de Actions. Disparo manual via **Actions → Run
-workflow**, escolhendo tier (1 mercado / 3 leilão) e se deve enviar
-notificação real pro Telegram (desligado por padrão — sem marcar essa
-opção, a rodada só atualiza o dashboard). Cada rodada publica
-`data/dashboard.html` automaticamente no GitHub Pages.
+workflow**, escolhendo o tier (1 mercado / 3 leilão). Cada rodada
+publica `data/dashboard.html` automaticamente no GitHub Pages.
 
 **Controle pelo celular:** o próprio dashboard publicado tem um botão
 "▶ Rodar agora" que dispara esse mesmo workflow via API do GitHub, sem
@@ -123,8 +98,8 @@ tela inicial" no navegador do celular.
 
 `config.yaml` → `mercado.multi_regiao: true` ativa a busca em
 São Paulo capital, Campinas e Piracicaba na mesma execução, cada uma
-com seu próprio teto de preço, score mínimo e referências de bairro.
-Todas caem no mesmo canal Telegram "mercado". VivaReal só é buscado
+com seu próprio teto de preço, score mínimo e referências de bairro —
+cada região vira sua própria aba no dashboard. VivaReal só é buscado
 para SP capital (a URL de busca do VivaReal não tem slug por região).
 
 ## Calibração de preços — automática (calibragem/)
@@ -149,8 +124,8 @@ Campinas/Piracicaba → mediana móvel dos próprios dados coletados pelo bot
    **nunca edita `config.yaml` diretamente**, preservando toda a
    curadoria manual e os comentários.
 4. Divergências ≥15% entre o valor curado e o recalibrado são
-   sinalizadas no canal Telegram "mercado" — essas são, literalmente,
-   as distorções de mercado que o bot existe para encontrar.
+   sinalizadas no log da calibragem — essas são, literalmente, as
+   distorções de mercado que o bot existe para encontrar.
 
 Rodar manualmente:
 ```bash

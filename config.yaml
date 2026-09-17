@@ -1,19 +1,9 @@
 # ============================================================
 # IMOVEL-BOT — Configuração Central
-# Tier 3 (leilão) está ON HOLD — foco total em Tier 1 (mercado).
-#
-# SEGURANÇA: este arquivo NUNCA deve conter token/IDs reais.
-# Em produção (GitHub Actions), os secrets sobrescrevem os
-# placeholders abaixo via main.py:_aplicar_env(). Localmente,
-# use variáveis de ambiente ou edite temporariamente e reverta
-# antes de qualquer commit/sync.
+# Bot é dashboard-only (sem Telegram, removido por pedido do
+# usuário) — resultado só aparece em data/dashboard.html /
+# GitHub Pages, não notifica nada por conta própria.
 # ============================================================
-
-telegram:
-  token: "SEU_BOT_TOKEN_AQUI"
-  channels:
-    mercado: "-100XXXXXXXXXX"   # Canal Tier 1 (ZAP, VivaReal, OLX)
-    leilao:  "-100YYYYYYYYYY"   # Canal Tier 3 (em hold)
 
 # ── Geo ──────────────────────────────────────────────────────
 geo:
@@ -271,4 +261,4 @@ leilao:
   resale_max_paginas: 20
 
 # ── Banco de dados ────────────────────────────────────────────
-db_path: "data/vistos.db"       # dedup + geo_cache (mesma base)
+db_path: "data/vistos.db"       # historico de preços + geo_cache (mesma base)

@@ -205,10 +205,6 @@ def _montar_html(resultados_mercado: Optional[dict], resultados_leilao: Optional
         <option value="3">3 — Leilão</option>
       </select>
     </label>
-    <label class="modal-checkbox">
-      <input type="checkbox" id="cfg-telegram">
-      Enviar notificações reais pro Telegram (desligado = só atualiza o dashboard)
-    </label>
     <div class="modal-botoes">
       <button type="button" onclick="salvarConfig()">Salvar</button>
       <button type="button" onclick="fecharConfig()">Cancelar</button>
@@ -816,7 +812,6 @@ function abrirConfig() {
   try {
     document.getElementById('cfg-token').value = localStorage.getItem('imovel-bot-pat') || '';
     document.getElementById('cfg-tier').value = localStorage.getItem('imovel-bot-tier') || '1';
-    document.getElementById('cfg-telegram').checked = localStorage.getItem('imovel-bot-telegram') === 'true';
   } catch (e) {}
   document.getElementById('modal-config').style.display = 'flex';
 }
@@ -826,13 +821,11 @@ function fecharConfig() {
 }
 
 function salvarConfig() {
-  var token    = document.getElementById('cfg-token').value.trim();
-  var tier     = document.getElementById('cfg-tier').value;
-  var telegram = document.getElementById('cfg-telegram').checked;
+  var token = document.getElementById('cfg-token').value.trim();
+  var tier  = document.getElementById('cfg-tier').value;
   try {
     if (token) localStorage.setItem('imovel-bot-pat', token);
     localStorage.setItem('imovel-bot-tier', tier);
-    localStorage.setItem('imovel-bot-telegram', telegram ? 'true' : 'false');
   } catch (e) {}
   fecharConfig();
 }
@@ -842,11 +835,8 @@ function rodarAgora() {
   try { token = localStorage.getItem('imovel-bot-pat'); } catch (e) {}
   if (!token) { abrirConfig(); return; }
 
-  var tier = '1', telegram = false;
-  try {
-    tier = localStorage.getItem('imovel-bot-tier') || '1';
-    telegram = localStorage.getItem('imovel-bot-telegram') === 'true';
-  } catch (e) {}
+  var tier = '1';
+  try { tier = localStorage.getItem('imovel-bot-tier') || '1'; } catch (e) {}
 
   var btn = document.getElementById('btn-rodar');
   btn.disabled = true;
@@ -862,7 +852,7 @@ function rodarAgora() {
     },
     body: JSON.stringify({
       ref: 'main',
-      inputs: { tier: tier, enviar_telegram: telegram ? 'true' : 'false' },
+      inputs: { tier: tier },
     }),
   }).then(function(res) {
     if (res.status === 204) {

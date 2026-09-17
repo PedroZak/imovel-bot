@@ -19,7 +19,7 @@ jobs:
 
       # O histórico de preços (data/vistos.db) precisa estar atualizado
       # para a mediana móvel de Campinas/Piracicaba fazer sentido —
-      # restaura o cache mais recente salvo pelo scheduler.yml principal.
+      # restaura o cache mais recente salvo pelo rodar-bot.yml principal.
       - name: Restore DB cache
         uses: actions/cache@v4
         with:
@@ -37,10 +37,6 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run calibragem
-        env:
-          TELEGRAM_TOKEN:           ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHANNEL_MERCADO: ${{ secrets.TELEGRAM_CHANNEL_MERCADO }}
-          TELEGRAM_CHANNEL_LEILAO:  ${{ secrets.TELEGRAM_CHANNEL_LEILAO }}
         run: python -m calibragem.calibrar
 
       - name: Commit referencias_calibradas.yaml

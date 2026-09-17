@@ -4,11 +4,14 @@ Este arquivo dá contexto de continuidade. Leia antes de mexer no código.
 
 ## O que é
 
-Bot que varre OLX + ZAP procurando apartamentos à venda em bairros
-específicos de São Paulo (capital), Campinas e Piracicaba, pontua cada
-um de 0–100 com base em preço/m² real (ITBI), yield de aluguel
-estimado, condomínio, metragem e distância a pé do escritório do
-usuário, e notifica os aprovados via Telegram.
+Bot que varre OLX, ZAP/VivaReal e QuintoAndar (mercado) + Caixa e Resale
+(leilão) procurando apartamentos à venda em bairros específicos de São
+Paulo (capital), Campinas e Piracicaba, pontua cada um de 0–100 com
+base em preço/m² real (ITBI), yield de aluguel estimado, condomínio,
+metragem e distância a pé do escritório do usuário. **Dashboard-only —
+sem Telegram** (removido por completo em 16/09/2026, pedido explícito
+do usuário — ver "Bugs corrigidos" #17): cada rodada só gera/atualiza
+`data/dashboard.html`, nunca envia nada por conta própria.
 
 **Objetivo declarado do usuário: achar distorções de mercado** —
 imóveis genuinamente abaixo do valor real, não só "baratos" no sentido
@@ -27,18 +30,28 @@ virtual Python foi movido pra **fora** dessa pasta de propósito
 (`$env:USERPROFILE\venvs\imovel-bot`), pra não sobrecarregar a
 sincronização do Drive com milhares de arquivos de pacote.
 
-**GitHub ainda não existe.** Decisão explícita do usuário: validar tudo
-localmente primeiro, GitHub fica pro final. Quando chegar lá, os 3
-secrets necessários são `TELEGRAM_TOKEN`, `TELEGRAM_CHANNEL_MERCADO`,
-`TELEGRAM_CHANNEL_LEILAO`.
+**GitHub existe desde 16/09/2026**: [github.com/PedroZak/imovel-bot](https://github.com/PedroZak/imovel-bot)
+(público — decisão explícita do usuário, necessário pro GitHub Pages
+gratuito). Dashboard publicado em https://pedrozak.github.io/imovel-bot/
+a cada rodada do workflow `.github/workflows/rodar-bot.yml`, que só
+roda sob demanda (sem cron — decisão explícita do usuário, economia de
+minutos de Actions). Sem Telegram, não há secret nenhum a configurar —
+o único jeito de disparar uma rodada é manual (**Actions → Run
+workflow**) ou pelo botão "▶ Rodar agora" dentro do próprio dashboard
+(ver "Bugs corrigidos" #16), que chama a API do GitHub com um PAT
+fine-grained que o usuário mesmo gera e guarda no `localStorage` do
+navegador — nunca passa pelo assistente nem fica embutido no código.
 
 ## Arquitetura
 
 ```
 main.py                    orquestrador. Tier 1 (mercado) é o padrão.
                             Tier 3 (leilão) só roda com --tier 3 explícito.
-config.yaml                curado à mão, comentado. Só placeholders de
-                            secret. NUNCA sobrescrever programaticamente.
+                            Sem Telegram/dedup — dashboard-only, ver
+                            "Bugs corrigidos" #17.
+config.yaml                curado à mão, comentado. NUNCA sobrescrever
+                            programaticamente. Não tem mais bloco
+                            telegram: (removido).
 referencias_calibradas.yaml gerado por calibragem/, mesclado em main.py
                             na carga do config (nunca edita config.yaml)
 
@@ -59,13 +72,23 @@ scrapers/
                             é chamado pelo main.py quando a região é SP
                             capital (SEARCH_URL do VivaReal é fixo em SP,
                             sem slug por região).
-  caixa_leilao.py          Tier 3, EM HOLD (não roda no cron, só com
-                            --tier 3 explícito). Reescrito 04/09/2026 —
-                            fluxo de 3 chamadas AJAX + 1 GET de detalhe
-                            por imóvel (site mudou de layout por
-                            completo). Ver "Bugs corrigidos" #9.
-  resale.py                Tier 3, EM HOLD. Adicionado 05/09/2026 —
-                            agrega imóveis de vários bancos (não só
+  quintoandar.py           Adicionado 15/09/2026 — API interna
+                            (`apigw.prod.quintoandar.com.br`), achada via
+                            captura HAR (site é SPA puro, sem SSR nem
+                            JSON-LD). Sem autenticação. Descarta listings
+                            `isPrimaryMarket` (lançamento, preço em faixa,
+                            não pontual) e `forSale=false`. `condominio`
+                            é `iptuPlusCondominium` combinado (limitação
+                            conhecida — API não separa os dois). Testado
+                            ao vivo nas 3 regiões (slug/coordenada/viewport
+                            calibrados em config.yaml → mercado.regions.*.
+                            quintoandar).
+  caixa_leilao.py          Tier 3. Reescrito 04/09/2026 — fluxo de 3
+                            chamadas AJAX + 1 GET de detalhe por imóvel
+                            (site mudou de layout por completo). Ver
+                            "Bugs corrigidos" #9.
+  resale.py                Tier 3. Adicionado 05/09/2026 — agrega
+                            imóveis de vários bancos (não só
                             Caixa) via API JSON própria (achada por
                             engenharia reversa do bundle JS do site,
                             não documentada). É a única fonte com
@@ -79,12 +102,17 @@ scrapers/
 scorers/
   mercado.py               7 critérios isolados, cada um uma função.
                             Ver docstring do arquivo pros pesos.
-  leilao.py                Tier 3, em hold. Fonte-agnóstico — roda em
-                            cima de Caixa e Resale igual.
+  leilao.py                Fonte-agnóstico — roda em cima de Caixa e
+                            Resale igual.
+  flip.py                  Calculadora compra-reforma-venda (FlipResult
+                            em scorers/base.py) — custo de reforma por
+                            cômodo, custo de manutenção durante reforma+
+                            venda (condomínio+IPTU), margem estimada.
+                            Parâmetros em config.yaml → reforma: (todos
+                            marcados "ESTIMATIVA INICIAL", pra o usuário
+                            calibrar com experiência real).
 
 notifier/
-  telegram.py              enviar_mercado, enviar_leilao, enviar_texto
-                            (genérico, usado pelo relatório de calibragem)
   dashboard.py             HTML local (data/dashboard.html), 2 abas de
                             nível superior — 🏠 Mercado / 🏦 Leilão
                             (adicionado 11/09/2026) — cada uma com
@@ -94,16 +122,13 @@ notifier/
                             cada uma só atualiza sua própria seção via
                             cache em disco (`_dash_cache_mercado.html`/
                             `_dash_cache_leilao.html`) — ver docstring
-                            do módulo e "Bugs corrigidos" #11.
-  dedup.py                 SQLite, 2 camadas: (id, fonte, canal) exato +
-                            fingerprint de conteúdo (bairro+preço+área+
-                            quartos arredondados) pra pegar repost com ID
-                            novo e cross-post ZAP/VivaReal. O dedup por
-                            fingerprint DENTRO do mesmo lote é feito em
-                            memória em main.py:_notificar (fingerprints_do_lote)
-                            — a marcação em SQLite só acontece após envio
-                            real, então não pegaria duplicatas do mesmo lote
-                            sozinha. Ver "Bugs corrigidos" #8.
+                            do módulo e "Bugs corrigidos" #11. Desde
+                            16/09/2026 também tem botão "▶ Rodar agora" +
+                            modal de configuração (PAT do GitHub salvo em
+                            localStorage) pra disparar o workflow direto
+                            do celular — ver "Bugs corrigidos" #16. Sem
+                            módulo telegram.py/dedup.py — removidos por
+                            completo, ver "Bugs corrigidos" #17.
 
 utils/
   bairro.py                normalizar/resolver bairro — compartilhado entre
@@ -125,36 +150,49 @@ calibragem/
                             bug, é gap de cobertura da fonte externa.
   calibrar.py               orquestra Atlas (SP) + mediana móvel
                             (Campinas/Piracicaba) → referencias_calibradas.yaml.
-                            TESTADO AO VIVO — roda sem erro fim a fim,
-                            inclusive o caminho de notificação (falha
-                            graciosamente se TELEGRAM_TOKEN não configurado).
+                            TESTADO AO VIVO — roda sem erro fim a fim.
+                            Resumo (bairros atualizados + divergências)
+                            só vai pro log agora, não manda mais Telegram
+                            (ver "Bugs corrigidos" #17).
 
-testar_scraper.py          script standalone, roda scraper sem precisar de
-                            Telegram configurado. Mostra também quantos
+testar_scraper.py          script standalone, testa OLX/ZAP/QuintoAndar e
+                            gera dashboard. Mostra também quantos
                             resultados batem com os bairros-alvo (vs total
-                            bruto da região).
+                            bruto da região). Não grava histórico de preços
+                            (main.py grava, esse não — usado só pra teste
+                            manual).
+
+pwa/                        manifest.webmanifest + sw.js + icon.svg —
+                            assets do dashboard instalável (PWA), copiados
+                            pro site publicado no Pages junto com
+                            data/dashboard.html. Ver "Bugs corrigidos" #16.
 
 .github/workflows/
-  scheduler.yml             roda Tier 1 3x/dia (7h/13h/19h Brasília)
+  rodar-bot.yml             SÓ workflow_dispatch, sem cron (renomeado de
+                            scheduler.yml em 16/09/2026 — ver "Bugs
+                            corrigidos" #16). Roda main.py --tier N e
+                            publica data/dashboard.html + pwa/ no GitHub
+                            Pages via actions/deploy-pages.
   calibragem.yml             roda calibragem mensal (dia 1º), commita
                             referencias_calibradas.yaml de volta
 ```
 
 ## Estado atual (o que funciona, o que não)
 
-Última validação ao vivo: 30/08/2026.
+Última validação ao vivo: 16/09/2026.
 
 | Fonte | Status | Detalhe |
 |---|---|---|
 | ZAP | ✅ Funciona | Via fallback JSON-LD. `__NEXT_DATA__` sumiu do site ao vivo, causa desconhecida, mas não importa — o fallback cobre. ~430-440 anúncios/rodada em sp_capital. |
 | OLX | ✅ Funciona | Site migrou pra Next.js App Router (RSC streaming) — `__NEXT_DATA__` sumiu de vez, parser reescrito pra ler o novo formato. 247 anúncios coletados em sp_capital no teste ao vivo. Ver "Bugs corrigidos" #7. |
 | VivaReal | ✅ Ativado (só SP capital) | `main.py:_viva_real_aplicavel()` só chama pra sp_capital — `scrapers/zap.py`'s SEARCH_URL do VivaReal é fixo em SP, sem slug por região; chamar em Campinas/Piracicaba traria resultado errado. 438 anúncios coletados no teste ao vivo. |
+| QuintoAndar | ✅ Testado ao vivo (15/09/2026) | API interna via engenharia reversa (captura HAR) — site é SPA puro, sem SSR. 97 listings em sp_capital no teste isolado; testado também combinado com OLX+ZAP (`--fonte todos`). |
 | Calibragem (Atlas + mediana móvel) | ✅ Testada ao vivo | 5/6 bairros de sp_capital retornaram valor do Atlas de primeira. `referencias_calibradas.yaml` gerado e validado. |
-| Dedup por conteúdo | ✅ Implementado | `notifier/dedup.py` + `main.py:_notificar` — pega repost com ID novo e cross-post ZAP/VivaReal. Testado ao vivo contra um repost real (mesmo apto, 3 IDs diferentes no OLX em Piracicaba). |
-| Caixa (Tier 3, leilão) | ✅ Reescrito e testado ao vivo (04/09/2026), agora cobre 3 cidades (11/09/2026) | Site mudou de layout por completo desde a versão anterior. Reescrito do zero pro fluxo real (3 chamadas AJAX + 1 GET de detalhe por imóvel). Pipeline completo (scraper→scorer→telegram) rodado via `main.py --tier 3 --dry-run` sem erro. Ver "Bugs corrigidos" #9 — inclui uma mudança de design, não só bug: filtro hard de ocupação foi removido (dado sumiu do site). Desde 11/09 busca São Paulo (395 imóveis no teste), Campinas (42) e Piracicaba (37), não só SP capital — ver "Bugs corrigidos" #12. |
-| Resale (Tier 3, leilão) | ✅ Testado ao vivo fim a fim (11/09/2026) | Segunda fonte de leilão, via API JSON própria (não documentada, achada por engenharia reversa). Agrega vários bancos, não só Caixa. Dado mais rico que a Caixa: ocupação real, dívidas e contencioso judicial. Pipeline completo (scraper→scorer→telegram) validado: 7 imóveis achados em SP/Campinas, 2 aprovados com filtro afrouxado. Ver "Bugs corrigidos" #10 pras limitações conhecidas (sem filtro de cidade via API, paginação real é `page` não `offset`, `order` quebra o backend deles, WAF sensível). |
+| Caixa (Tier 3, leilão) | ✅ Reescrito e testado ao vivo (04/09/2026), agora cobre 3 cidades (11/09/2026) | Site mudou de layout por completo desde a versão anterior. Reescrito do zero pro fluxo real (3 chamadas AJAX + 1 GET de detalhe por imóvel). Pipeline completo (scraper→scorer→dashboard) sem erro. Ver "Bugs corrigidos" #9 — inclui uma mudança de design, não só bug: filtro hard de ocupação foi removido (dado sumiu do site). Desde 11/09 busca São Paulo (395 imóveis no teste), Campinas (42) e Piracicaba (37), não só SP capital — ver "Bugs corrigidos" #12. |
+| Resale (Tier 3, leilão) | ✅ Testado ao vivo fim a fim (11/09/2026) | Segunda fonte de leilão, via API JSON própria (não documentada, achada por engenharia reversa). Agrega vários bancos, não só Caixa. Dado mais rico que a Caixa: ocupação real, dívidas e contencioso judicial. Pipeline completo (scraper→scorer→dashboard) validado: 7 imóveis achados em SP/Campinas, 2 aprovados com filtro afrouxado. Ver "Bugs corrigidos" #10 pras limitações conhecidas (sem filtro de cidade via API, paginação real é `page` não `offset`, `order` quebra o backend deles, WAF sensível). |
 | Dashboard unificado (Mercado + Leilão) | ✅ Testado ao vivo (11/09/2026) | `notifier/dashboard.py` agora tem 2 abas de nível superior. Testado combinando uma rodada real de Tier 1 (OLX, sp_capital) com uma rodada real de Tier 3 (Resale) em invocações separadas — confirmado visualmente que as duas seções coexistem sem se apagar. Ver "Bugs corrigidos" #11. |
-| GitHub Actions | ⏸️ Não existe ainda | Repositório nunca foi criado. |
+| GitHub Actions + Pages + PWA | ✅ No ar (16/09/2026) | Repo público, Pages via Actions habilitado. `rodar-bot.yml` só roda sob demanda (sem cron), publica dashboard em https://pedrozak.github.io/imovel-bot/. Botão "Rodar agora" no dashboard dispara o workflow via API do GitHub usando PAT do próprio usuário salvo em localStorage. Ver "Bugs corrigidos" #16. |
+| Telegram / dedup | ❌ Removido por completo (16/09/2026) | Pedido explícito do usuário — bot é dashboard-only agora. Ver "Bugs corrigidos" #17. |
 
 ## Bugs reais já encontrados e corrigidos (não redescobrir)
 
@@ -494,6 +532,96 @@ cronológica:
     `possui_contencioso` testado com listing sintético (não achei
     exemplo real com esse valor no ar no momento do teste).
 
+15. **QuintoAndar adicionado como 3ª fonte de mercado (15/09/2026)** —
+    pedido do usuário: entender por que QuintoAndar não era scrapeado,
+    e resolver. Causa: é um SPA React puro, sem SSR nem JSON-LD — nada
+    útil no HTML inicial, ao contrário de OLX/ZAP. Resolvido via
+    captura de HAR real feita pelo usuário no Chrome DevTools (duas
+    tentativas — a primeira capturou a home em vez da busca, e veio
+    truncada; a segunda, completa, achou a API real). Endpoint:
+    `POST apigw.prod.quintoandar.com.br/house-listing-search/v3/search/list`,
+    sem autenticação nenhuma. `scrapers/quintoandar.py:_item_para_listing`
+    descarta `isPrimaryMarket=true` (lançamento — preço vem em faixa
+    min/max, não um valor pontual comparável ao resto do scorer) e
+    `forSale=false`. Limitação aceita: `condominio` é
+    `iptuPlusCondominium` já somado pela API — não dá pra separar os
+    dois componentes. Testado ao vivo nas 3 regiões (97 listings em
+    sp_capital isolado); Piracicaba inicialmente deu 0 resultados por
+    causa de um viewport (bounding box) mal calibrado — corrigido pra
+    um viewport mais largo, mesmo padrão das outras regiões.
+
+16. **GitHub Actions + Pages + controle remoto via PWA (16/09/2026)** —
+    pedido do usuário: rodar o bot e ver resultado mesmo com o PC
+    desligado, incluindo do celular. Decisões (confirmadas com o
+    usuário antes de implementar):
+    - Repositório **público** — GitHub Pages grátis exige isso pra
+      repo privado seria pago.
+    - Workflow **só sob demanda** (`workflow_dispatch`), sem
+      `schedule:` — usuário decidiu que rodar 3x/dia (padrão anterior,
+      `scheduler.yml`) era gasto desnecessário de minutos de Actions.
+      Arquivo renomeado pra `rodar-bot.yml` (refletir que não é mais
+      "scheduler" nenhum).
+    - Controle remoto do celular **sem** embutir secret nenhum na
+      página pública: o dashboard (`notifier/dashboard.py`) ganhou um
+      botão "▶ Rodar agora" + modal "⚙" que pede um PAT fine-grained
+      do GitHub (escopo `Actions: Read and write` só nesse repo) —
+      salvo só em `localStorage` do navegador do usuário, nunca
+      passa pelo código publicado nem pelo assistente. O botão chama
+      `POST /repos/{owner}/repo/actions/workflows/rodar-bot.yml/dispatches`
+      direto da página.
+    - Dashboard também é PWA instalável (`pwa/manifest.webmanifest`,
+      `pwa/sw.js` — network-first pra HTML, cache-first fallback só
+      offline; `pwa/icon.svg`). Service worker só registra quando
+      `location.protocol !== 'file:'` — no uso local (arquivo aberto
+      direto), o bloco vira no-op silencioso.
+    - Workflow monta um diretório `site/` (dashboard.html renomeado
+      pra index.html + os assets de `pwa/`) e publica só isso no Pages
+      via `actions/upload-pages-artifact` — nunca publica `data/`
+      inteiro (teria `vistos.db` e HTMLs de debug).
+    Habilitado via `gh api repos/PedroZak/imovel-bot/pages -X POST -f
+    build_type=workflow` (com autorização explícita do usuário antes
+    de mudar a configuração do repositório). Testado visualmente no
+    browser: botão abre o modal quando não há PAT salvo, dark mode
+    funciona nos elementos novos.
+
+17. **Telegram removido por completo (16/09/2026)** — pedido explícito
+    do usuário ("n quero telegram"), depois de confirmar que era pra
+    remover de verdade (não só deixar de configurar). Motivo prático:
+    o workflow sob demanda já tinha o Telegram desligado por padrão
+    (`enviar_telegram: false`) desde o item #16 — manter o módulo
+    inteiro parado, sem nenhum consumidor real, seria código morto.
+    Removido:
+    - `notifier/telegram.py` (inteiro).
+    - `notifier/dedup.py` (inteiro) — sua ÚNICA função era evitar
+      reenvio duplicado pro Telegram; o dashboard sempre mostrou TODO
+      aprovado da rodada independente de dedup (nunca dependeu desse
+      módulo). `geo_cache` (tabela que `dedup.inicializar()` também
+      criava) já tinha init próprio e idempotente em
+      `utils/geo.py:_init_cache()` — nenhuma outra parte do sistema
+      dependia de `dedup.py` sobrevivendo.
+    - Bloco `telegram:` de `config.yaml`, inputs/secrets
+      `TELEGRAM_*` de `rodar-bot.yml` e `calibragem.yml`, flag
+      `--dry-run`/`_validar_config`/`_aplicar_env` de `main.py`
+      (não tinham mais razão de existir sem secret pra validar).
+    - Checkbox "Enviar pro Telegram" do modal de controle remoto do
+      dashboard (`notifier/dashboard.py`) — `rodarAgora()` não manda
+      mais o input `enviar_telegram` no dispatch.
+    - `calibragem/calibrar.py:notificar_resumo()` virou `logar_resumo()`
+      — resumo da calibragem (bairros atualizados + divergências) vai
+      só pro log agora, não tenta mais mandar Telegram.
+    - Opção 6 do `testar.bat` (que injetava credenciais fake só pra
+      passar da validação de config) virou simplesmente "rodar bot
+      completo, Tier 1" — sem workaround nenhum, porque não tem mais
+      validação de Telegram pra contornar.
+    `main.py` ficou bem mais simples: `_coletar_pontuar_notificar` (que
+    também deduplicava e enviava) virou `_coletar_e_pontuar` (só
+    coleta, grava histórico, pontua — sem loop de envio/dedup).
+    **Efeito colateral**: os itens de backlog "Fingerprint dedup
+    aproximado" e "Tier 3 sem dedup entre fontes" (histórico, mais
+    abaixo) ficam obsoletos — não existe mais dedup nenhum no projeto,
+    não é uma limitação, é o comportamento pretendido agora (dashboard
+    sempre mostra tudo que passou no score na rodada atual).
+
 ## Backlog conhecido (não resolvido, com contexto)
 
 - **Campinas/Piracicaba com calibragem fraca** — sem fonte tipo Atlas
@@ -505,19 +633,11 @@ cronológica:
   é uma URL fixa de São Paulo, sem suporte a slug por região (diferente
   do ZAP). Pra ativar em Campinas/Piracicaba precisaria descobrir a URL
   de busca do VivaReal por região primeiro — não tentado ainda.
-- **Fingerprint dedup é aproximado, não à prova de falso positivo** —
-  arredonda preço (R$500) e área (2m²) por bairro+quartos. Pode, em
-  teoria, colapsar duas unidades DIFERENTES de um mesmo lançamento que
-  coincidam em preço+área+quartos arredondados (não observado ainda em
-  dado real, mas é uma limitação de design conhecida).
-- **Tier 3 sem dedup entre fontes** — Caixa e Resale podem, em teoria,
-  listar o mesmo imóvel (ex: se a Resale também revender inventário
-  Caixa) com IDs diferentes por fonte; `main.py:_notificar` só faz
-  dedup exato (id, fonte, canal) no Tier 3, sem a camada de fingerprint
-  que o Tier 1 tem — não é trivial reaproveitar direto porque
-  `resolver_bairro`/`texto_localizacao` (usados no fingerprint do Tier
-  1) esperam os campos de `Listing` (mercado), não de `LeilaoListing`.
-  Não implementado ainda por não ter sido observado como problema real.
+- ~~Fingerprint dedup / dedup entre fontes~~ — **obsoleto desde
+  16/09/2026**: não existe mais dedup nenhum no projeto (Telegram e
+  `notifier/dedup.py` foram removidos por completo, ver "Bugs
+  corrigidos" #17). Dashboard sempre mostra todo aprovado da rodada
+  atual, sem tentar lembrar de rodadas anteriores.
 - **`leilaoimovel.com.br` não implementado** — agregador multi-banco
   (Santander, Bradesco, BB e a própria Caixa juntos), promissor, mas
   fica pra depois: tem filtro de cidade/bairro em cascata via AJAX
@@ -539,10 +659,15 @@ cronológica:
 
 ## Segurança
 
-- Token antigo do Telegram vazou uma vez (achado num arquivo real
-  numa pasta do Drive). Usuário foi instruído a revogar via
-  `@BotFather` e gerar um novo — confirmar que isso foi feito antes
-  de qualquer teste real com envio.
-- `config.yaml` só tem placeholders. Valores reais só via variável de
-  ambiente na sessão local (nunca salvos em arquivo), ou GitHub
-  Secrets quando chegar lá.
+- Histórico: um token antigo do Telegram vazou uma vez (achado num
+  arquivo real numa pasta do Drive) — motivou parte da disciplina de
+  nunca commitar secret nenhum neste projeto. Desde 16/09/2026 isso
+  deixou de ser uma categoria de risco aqui: Telegram foi removido por
+  completo (ver "Bugs corrigidos" #17), `config.yaml` não tem mais
+  bloco `telegram:`/token nenhum, e o repositório não guarda secret
+  nenhum no GitHub (nenhum `gh secret set` foi necessário).
+- O único "segredo" do sistema hoje é o PAT fine-grained que cada
+  usuário gera pra si mesmo pra usar o botão "Rodar agora" do
+  dashboard — nunca passa pelo código do repositório nem pelo
+  assistente, fica só no `localStorage` do navegador de quem gerou.
+  Ver "Bugs corrigidos" #16.
