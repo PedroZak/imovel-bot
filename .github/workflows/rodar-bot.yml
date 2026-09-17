@@ -35,10 +35,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore DB cache
+      # Cache tem que cobrir vistos.db (histórico de preços/geo_cache) E os
+      # 2 caches do dashboard (data/_dash_cache_mercado.html /
+      # _dash_cache_leilao.html) — sem isso, cada rodada do Actions começa
+      # de um checkout LIMPO, sem os arquivos que notifier/dashboard.py usa
+      # pra reaproveitar a aba do tier que não rodou agora (ver
+      # notifier/dashboard.py e CLAUDE.md "Bugs corrigidos" #11): rodar só
+      # Tier 3 apagaria a aba de Mercado do site publicado (e vice-versa).
+      - name: Restore cache
         uses: actions/cache@v4
         with:
-          path: data/vistos.db
+          path: |
+            data/vistos.db
+            data/_dash_cache_mercado.html
+            data/_dash_cache_leilao.html
           key: imovel-bot-db-${{ github.run_id }}
           restore-keys: |
             imovel-bot-db-
@@ -61,11 +71,14 @@ jobs:
       - name: Run bot
         run: python main.py --tier ${{ inputs.tier }}
 
-      - name: Save DB cache
+      - name: Save cache
         if: always()
         uses: actions/cache@v4
         with:
-          path: data/vistos.db
+          path: |
+            data/vistos.db
+            data/_dash_cache_mercado.html
+            data/_dash_cache_leilao.html
           key: imovel-bot-db-${{ github.run_id }}
 
       - name: Montar site para o GitHub Pages

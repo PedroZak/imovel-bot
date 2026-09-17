@@ -622,6 +622,29 @@ cronológica:
     não é uma limitação, é o comportamento pretendido agora (dashboard
     sempre mostra tudo que passou no score na rodada atual).
 
+18. **Cache do dashboard não sobrevivia entre rodadas do GitHub Actions
+    (17/09/2026)** — usuário rodou Tier 1 real (111 aprovados, aba
+    Mercado populada), depois perguntou como rodar o Leilão e notou que
+    a aba Leilão aparecia zerada. Causa: o mecanismo de cache em disco
+    que faz Tier 1 e Tier 3 conviverem sem se apagar (`_dash_cache_mercado.html`/
+    `_dash_cache_leilao.html`, ver "Bugs corrigidos" #11) foi desenhado
+    pra máquina local, onde o filesystem persiste entre execuções. No
+    GitHub Actions cada rodada começa de um **checkout limpo** — só o
+    que está explicitamente em `actions/cache` sobrevive, e o
+    `rodar-bot.yml` original só cacheava `data/vistos.db`, não os 2
+    HTMLs de cache do dashboard. Resultado real: rodar só Tier 3
+    apagaria a aba Mercado do site publicado (e vice-versa) — não era
+    "leilão zerado por bug no scraper", era o cache nunca ter chance de
+    sobreviver de uma rodada de Actions pra outra. Fix: `path:` dos
+    passos "Restore cache"/"Save cache" em `rodar-bot.yml` passou a
+    listar os 3 arquivos (`vistos.db` + os 2 `_dash_cache_*.html`), não
+    só o banco. **Atenção**: como o fix só entrou depois da primeira
+    rodada de Tier 1 em produção, o cache daquela rodada nunca foi
+    salvo (workflow antigo não sabia que devia salvar os HTMLs) — a
+    primeira rodada de Tier 1 DEPOIS deste fix é que começa a alimentar
+    o cache pra valer; até lá, rodar só Tier 3 ainda mostraria Mercado
+    vazio uma última vez.
+
 ## Backlog conhecido (não resolvido, com contexto)
 
 - **Campinas/Piracicaba com calibragem fraca** — sem fonte tipo Atlas
