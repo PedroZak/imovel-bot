@@ -1,0 +1,8 @@
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+pyyaml>=6.0.1
+lxml>=5.0.0          # parser mais rápido para BeautifulSoup
+curl_cffi>=0.7.0      # impersonate TLS — necessário para olx.py contornar 403
+
+# scrapers/caixa_leilao.py (Tier 3, em hold) usa só requests — o portal
+# não exige execução de JS pro fluxo de busca, playwright não é necessário.

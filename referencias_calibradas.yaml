@@ -1,0 +1,90 @@
+# Gerado automaticamente por calibragem/calibrar.py — não editar à mão.
+# main.py mescla este arquivo com config.yaml na inicialização.
+
+gerado_em: '2026-09-16T00:57:41.130790+00:00'
+regions:
+  sp_capital:
+    Vila Mariana:
+      compra_m2: 11000.0
+      fonte: atlas
+    Moema:
+      compra_m2: 12669.0
+      fonte: atlas
+    Pinheiros:
+      compra_m2: 13407.0
+      fonte: atlas
+    Jardim Paulista:
+      compra_m2: 12454.0
+      fonte: atlas
+    Itaim Bibi:
+      compra_m2: 13989.0
+      fonte: atlas
+  campinas:
+    Cambuí:
+      compra_m2: 7130.91
+      fonte: mediana_movel
+      amostras: 43
+      faixa:
+      - 3184.71
+      - 15370.37
+    Mansões Santo Antônio:
+      compra_m2: 8695.65
+      fonte: mediana_movel
+      amostras: 23
+      faixa:
+      - 5623.19
+      - 11632.82
+  piracicaba:
+    São Dimas:
+      compra_m2: 9250.0
+      fonte: mediana_movel
+      amostras: 63
+      faixa:
+      - 5000.0
+      - 11842.11
+    Cidade Alta:
+      compra_m2: 6333.33
+      fonte: mediana_movel
+      amostras: 161
+      faixa:
+      - 3333.33
+      - 10000.0
+    Nova Piracicaba:
+      compra_m2: 4915.25
+      fonte: mediana_movel
+      amostras: 263
+      faixa:
+      - 2711.86
+      - 8333.33
+    Centro:
+      compra_m2: 3977.43
+      fonte: mediana_movel
+      amostras: 218
+      faixa:
+      - 2105.26
+      - 9705.88
+divergencias:
+- regiao: campinas
+  bairro: Cambuí
+  valor_config: 8500
+  valor_novo: 7130.91
+  diff_pct: -16.1
+  fonte: mediana_movel
+- regiao: campinas
+  bairro: Mansões Santo Antônio
+  valor_config: 6500
+  valor_novo: 8695.65
+  diff_pct: 33.8
+  fonte: mediana_movel
+- regiao: piracicaba
+  bairro: São Dimas
+  valor_config: 6500
+  valor_novo: 9250.0
+  diff_pct: 42.3
+  fonte: mediana_movel
+- regiao: piracicaba
+  bairro: Centro
+  valor_config: 5500
+  valor_novo: 3977.43
+  diff_pct: -27.7
+  fonte: mediana_movel

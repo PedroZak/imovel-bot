@@ -1,0 +1,53 @@
+name: imovel-bot-calibragem
+
+on:
+  schedule:
+    # Todo dia 1º do mês, 6h UTC (~3h Brasília)
+    - cron: "0 6 1 * *"
+  workflow_dispatch: {}   # permite rodar manualmente pelo GitHub UI
+
+jobs:
+  calibrar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write   # precisa para commitar referencias_calibradas.yaml
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # O histórico de preços (data/vistos.db) precisa estar atualizado
+      # para a mediana móvel de Campinas/Piracicaba fazer sentido —
+      # restaura o cache mais recente salvo pelo scheduler.yml principal.
+      - name: Restore DB cache
+        uses: actions/cache@v4
+        with:
+          path: data/vistos.db
+          key: imovel-bot-db-${{ github.run_id }}
+          restore-keys: |
+            imovel-bot-db-
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run calibragem
+        env:
+          TELEGRAM_TOKEN:           ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHANNEL_MERCADO: ${{ secrets.TELEGRAM_CHANNEL_MERCADO }}
+          TELEGRAM_CHANNEL_LEILAO:  ${{ secrets.TELEGRAM_CHANNEL_LEILAO }}
+        run: python -m calibragem.calibrar
+
+      - name: Commit referencias_calibradas.yaml
+        run: |
+          git config user.name "imovel-bot-calibragem"
+          git config user.email "actions@github.com"
+          git add referencias_calibradas.yaml
+          git diff --cached --quiet && echo "Sem mudanças para commitar" || \
+            git commit -m "chore: atualiza referências de calibragem ($(date +%Y-%m-%d))"
+          git push

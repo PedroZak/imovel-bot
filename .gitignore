@@ -1,0 +1,25 @@
+# ── Segredos — nunca commitar ────────────────────────────────
+config.local.yaml
+.env
+
+# ── Banco de dados local (dedup + geo_cache) ─────────────────
+data/vistos.db
+
+# ── Debug / scraping (podem conter dados sensíveis ou pesar MB) ─
+*.html
+data/debug_*.html
+data/playwright_storage_state.json
+
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ── Editor / OS ───────────────────────────────────────────────
+.vscode/
+.DS_Store
+
+# ── Claude Code — config pessoal da sessão, não é do projeto ──
+.claude/settings.local.json

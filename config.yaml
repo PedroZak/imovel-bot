@@ -1,0 +1,274 @@
+# ============================================================
+# IMOVEL-BOT — Configuração Central
+# Tier 3 (leilão) está ON HOLD — foco total em Tier 1 (mercado).
+#
+# SEGURANÇA: este arquivo NUNCA deve conter token/IDs reais.
+# Em produção (GitHub Actions), os secrets sobrescrevem os
+# placeholders abaixo via main.py:_aplicar_env(). Localmente,
+# use variáveis de ambiente ou edite temporariamente e reverta
+# antes de qualquer commit/sync.
+# ============================================================
+
+telegram:
+  token: "SEU_BOT_TOKEN_AQUI"
+  channels:
+    mercado: "-100XXXXXXXXXX"   # Canal Tier 1 (ZAP, VivaReal, OLX)
+    leilao:  "-100YYYYYYYYYY"   # Canal Tier 3 (em hold)
+
+# ── Geo ──────────────────────────────────────────────────────
+geo:
+  escritorio_lat:   -23.5874   # Leopoldo Couto de Magalhães Jr, 700
+  escritorio_lng:   -46.6785
+  distancia_max_km:  3.0       # raio de caminhada
+
+# ── Filtros e parâmetros de mercado (Tier 1) ─────────────────
+mercado:
+  tipo:    "apartamento"
+  negocio: "venda"
+  cidade:  "São Paulo"
+
+  # Filtros hard (eliminatórios)
+  preco_max:      500000
+  preco_min:      280000
+  area_min:       40            # m²
+  quartos_min:    1             # studio eliminado
+  condominio_max: 1000          # R$/mês
+
+  score_minimo: 60              # 0–100
+
+  # Cidades a excluir dos resultados (evita ABC/Grande SP
+  # aparecendo em buscas de "São Paulo"). Vazio = sem filtro.
+  cidades_excluidas:
+    - "santo andre"
+    - "sao bernardo"
+    - "sao caetano"
+    - "osasco"
+    - "guarulhos"
+    - "barueri"
+    - "alphaville"
+
+  # Cenário de financiamento C — 30% de entrada, ~11% a.a., 360 meses
+  # (tabela PRICE). A parcela NÃO é um valor fixo: o scorer calcula
+  # dinamicamente por imóvel a partir do preço, usando estes parâmetros.
+  # Necessário com multi-região — preços variam muito entre SP capital,
+  # Campinas e Piracicaba, e uma parcela fixa distorceria o yield exigido.
+  financiamento_taxa_anual:  0.11   # ~11% a.a.
+  financiamento_prazo_meses: 360
+  financiamento_entrada_pct: 0.30   # 30% de entrada
+  cobertura_alvo:            0.40   # aluguel cobre cond + IPTU + 40% da parcela
+
+  # Yield threshold (referência aproximada — o mínimo real é calculado
+  # dinamicamente por imóvel via _estimar_parcela_mensal() no scorer)
+  yield_otimo_mensal:  0.0055   # 6,6% a.a. → pontuação máxima
+
+  # ── Multi-região ──────────────────────────────────────────
+  # Ativado: roda OLX+ZAP em São Paulo capital, Campinas e
+  # Piracicaba, cada uma com seu próprio preco_max, score_minimo
+  # e bairros_referencia. Todas caem no mesmo canal Telegram.
+  #
+  # ATENÇÃO: bairros_referencia de Campinas e Piracicaba abaixo
+  # ainda são ESTIMATIVA PRÓPRIA, nunca validados contra dado real
+  # (ao contrário de SP capital, que já usa Atlas/ITBI + DataZAP).
+  # Calibrar é o próximo passo recomendado.
+  multi_regiao: true
+
+  regions:
+    sp_capital:
+      display_name: "São Paulo - Capital"
+      # Slugs verificados contra a estrutura real dos sites (jun/2026)
+      slug_olx: "venda/apartamentos/estado-sp/sao-paulo-e-regiao"
+      slug_zap: "sp+sao-paulo"
+      # slug/coordenada/viewport do QuintoAndar — testados ao vivo
+      # (16/09/2026) via engenharia reversa da API interna (ver
+      # scrapers/quintoandar.py). viewport é a caixa delimitadora da
+      # cidade inteira, não precisa ser exata.
+      quintoandar:
+        slug: "sao-paulo-sp-brasil"
+        coordenada: {lat: -23.5505, lng: -46.6333}
+        viewport: {north: -23.35, south: -23.80, east: -46.36, west: -46.83}
+      preco_max: 500000
+      score_minimo: 60
+      cidades_excluidas:
+        - "santo andre"
+        - "sao bernardo"
+        - "sao caetano"
+        - "osasco"
+        - "guarulhos"
+        - "barueri"
+        - "alphaville"
+      bairros_referencia:
+        # compra_m2: atlasdados.com/sp — ITBI, preço real de fechamento,
+        #            área privativa, jun/2026 (NÃO trocar por preço de
+        #            anúncio — o gap entre eles é justamente o "colchão"
+        #            de negociação que queremos enxergar no score)
+        # aluguel_m2: DataZAP / Imovelweb, ago/2026
+        "Vila Mariana":
+          compra_m2: 10801
+          aluguel_m2: 76
+        "Paraíso":
+          compra_m2: 10500
+          aluguel_m2: 78     # interpolado (sem dado direto DataZAP) — revisar
+        "Moema":
+          compra_m2: 12727
+          aluguel_m2: 80
+        "Pinheiros":
+          compra_m2: 13628
+          aluguel_m2: 98
+        "Jardim Paulista":
+          compra_m2: 12709
+          aluguel_m2: 87
+        "Itaim Bibi":
+          compra_m2: 14349
+          aluguel_m2: 90
+
+    campinas:
+      display_name: "Campinas"
+      slug_olx: "venda/apartamentos/estado-sp/grande-campinas"
+      slug_zap: "sp+campinas"
+      quintoandar:
+        slug: "campinas-sp-brasil"
+        coordenada: {lat: -22.9099, lng: -47.0626}
+        viewport: {north: -22.80, south: -23.02, east: -46.95, west: -47.20}
+      preco_max: 600000
+      score_minimo: 45
+      cidades_excluidas: []     # sem exclusão — a própria região é Campinas
+      bairros_referencia:
+        # AINDA NÃO CALIBRADO — estimativa própria, sem validação externa
+        "Cambuí":
+          compra_m2: 8500
+          aluguel_m2: 60
+        "Taquaral":
+          compra_m2: 7000
+          aluguel_m2: 45
+        "Mansões Santo Antônio":
+          compra_m2: 6500
+          aluguel_m2: 40
+        "Parque das Universidades":
+          compra_m2: 6000
+          aluguel_m2: 35
+
+    piracicaba:
+      display_name: "Piracicaba"
+      # No OLX, Piracicaba é sub-região de "grande-campinas", não uma
+      # região própria — "piracicaba-e-regiao" sozinho não existe e
+      # retornaria zero resultados.
+      slug_olx: "venda/apartamentos/estado-sp/grande-campinas/piracicaba"
+      slug_zap: "sp+piracicaba"
+      quintoandar:
+        slug: "piracicaba-sp-brasil"
+        coordenada: {lat: -22.7338, lng: -47.6476}
+        viewport: {north: -22.40, south: -23.05, east: -47.30, west: -47.95}
+      preco_max: 500000
+      score_minimo: 42
+      cidades_excluidas: []
+      bairros_referencia:
+        # AINDA NÃO CALIBRADO — estimativa própria, sem validação externa
+        "São Dimas":
+          compra_m2: 6500
+          aluguel_m2: 45
+        "Cidade Alta":
+          compra_m2: 6000
+          aluguel_m2: 40
+        "Nova Piracicaba":
+          compra_m2: 5000
+          aluguel_m2: 35
+        "Centro":
+          compra_m2: 5500
+          aluguel_m2: 38
+
+# ── Referências de mercado (usado quando multi_regiao: false) ─────────────────
+# compra_m2:  atlasdados.com/sp — ITBI, preço real de fechamento, área
+#             privativa, jun/2026. Deliberadamente NÃO usa preço de
+#             anúncio (DataZAP/Imovelweb rodam 13%–47% acima do ITBI
+#             nestes bairros) — isso preservaria a distância que o
+#             score usa para achar imóvel abaixo do valor real de mercado.
+# aluguel_m2: DataZAP / Imovelweb, ago/2026 — substituiu estimativa própria
+#             anterior, que estava 11%–29% abaixo do valor real na maioria
+#             dos bairros (Itaim Bibi foi o único já próximo do real).
+bairros_referencia:
+  "Vila Mariana":
+    compra_m2:  10801
+    aluguel_m2: 76
+  "Paraíso":
+    compra_m2:  10500
+    aluguel_m2: 78         # interpolado — sem dado direto DataZAP
+  "Moema":
+    compra_m2:  12727
+    aluguel_m2: 80
+  "Pinheiros":
+    compra_m2:  13628
+    aluguel_m2: 98
+  "Jardim Paulista":
+    compra_m2:  12709
+    aluguel_m2: 87
+  "Itaim Bibi":
+    compra_m2:  14349
+    aluguel_m2: 90
+
+# ── Reforma (análise de flip: compra + reforma + venda) ───────
+# ESTIMATIVA INICIAL — nenhum valor abaixo vem de fonte de dado real,
+# é um modelo simples por cômodo (ver scorers/flip.py). Troque pelos
+# seus números reais de obra conforme for tendo experiência — mesmo
+# espírito das bairros_referencia de Campinas/Piracicaba (começa
+# estimado, refina depois). "Padrão médio" = acabamento intermediário,
+# sem luxo (porcelanato/laminado padrão, metais/louças linha média).
+#
+# Cards de flip só aparecem quando o anúncio tem quartos E banheiros
+# capturados pelo scraper — sem isso a conta não roda (ver
+# scorers/flip.py:calcular). margem_pct NÃO desconta ITBI, corretagem
+# nem IR sobre ganho de capital — margem_minima_pct deve ser generosa
+# o bastante pra cobrir isso.
+#
+# meses_reforma_estimado / meses_venda_estimado: usados pra cobrar
+# condomínio+IPTU do período inteiro (compra → reforma → anúncio →
+# venda). NÃO temos prazo médio de venda real por bairro — nem o
+# Atlas nem os scrapers têm esse dado hoje (ver conversa/CLAUDE.md) —
+# então isso é estimativa manual, ajuste com sua experiência.
+reforma:
+  custo_quarto:          8000    # R$ por quarto (piso, pintura, elétrica do cômodo)
+  custo_banheiro:        12000   # R$ por banheiro (troca de louças/metais/box/revestimento)
+  custo_cozinha:         15000   # R$ fixo (assume 1 cozinha por apartamento)
+  custo_sala:            10000   # R$ fixo (assume 1 sala por apartamento)
+  custo_area_comum_m2:   150     # R$/m² sobre a área total (acabamento geral do resto do apto)
+  meses_reforma_estimado: 3      # meses pagando condomínio/IPTU durante a obra
+  meses_venda_estimado:   6      # meses pagando condomínio/IPTU até vender, após anunciar
+  margem_minima_pct:     0.20    # abaixo disso = "margem apertada"; negativo = "não compensa"
+
+# ── Filtros de leilão (Tier 3 — ON HOLD) ──────────────────────
+# apenas_desocupados foi REMOVIDO — a Caixa parou de publicar ocupação
+# por imóvel (confirmado ao vivo, set/2026; ver docstring de
+# scrapers/caixa_leilao.py). Pra fontes que informam ocupação de
+# verdade (Resale), o scorer volta a tratar como filtro hard — ver
+# scorers/leilao.py.
+leilao:
+  estados:  ["SP"]
+  # Nomes de cidade "livres" — usado pelas duas fontes. scrapers/resale.py
+  # filtra por texto direto (a API não tem filtro de cidade que funcione,
+  # ver docstring do módulo). scrapers/caixa_leilao.py traduz cada nome
+  # pro código interno da Caixa via _CODIGO_CIDADE_SP (mapa fixo, só SP
+  # capital/Campinas/Piracicaba cadastrados — adicionar cidade nova aqui
+  # exige também adicionar o código lá). Mesmas 3 regiões do Tier 1.
+  cidades: ["São Paulo", "Campinas", "Piracicaba"]
+  tipo:     "apartamento"
+  desconto_minimo:    25
+  score_minimo: 50
+  # Adicionado 12/09/2026 (revisão de filtros, pedido do usuário) —
+  # scorers/leilao.py não tinha teto de preço; um imóvel de R$2M com
+  # bom desconto% passava batido, mesmo fora do orçamento do usuário.
+  # area_min foi cogitado mas descartado (13/09/2026) — usuário decidiu
+  # manter qualquer metragem em leilão, sem piso.
+  preco_max: 500000    # mesmo orçamento do Tier 1 (config.mercado)
+  # Teto de imóveis com detalhe buscado POR CIDADE (1 request cada, é o
+  # único jeito de saber a avaliação/desconto real — ver docstring do
+  # scraper). Uma busca sem filtro de bairro em sp_capital já trouxe
+  # >500 imóveis num teste ao vivo; sem teto isso demoraria muito e
+  # martelaria o site à toa. Com 3 cidades, o pior caso é 3×max_detalhes
+  # requests numa rodada.
+  max_detalhes: 150
+  # Resale não tem filtro de cidade/estado que funcione via API (ver
+  # docstring de scrapers/resale.py) — pagina tudo e filtra no Python,
+  # por isso o teto aqui é de PÁGINAS (10 imóveis cada), não imóveis.
+  resale_max_paginas: 20
+
+# ── Banco de dados ────────────────────────────────────────────
+db_path: "data/vistos.db"       # dedup + geo_cache (mesma base)
