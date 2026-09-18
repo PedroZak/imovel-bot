@@ -17,6 +17,7 @@ from scrapers  import olx, zap, quintoandar
 from scorers   import mercado as scorer_mercado
 from notifier  import dashboard
 from utils     import historico
+from utils.bairro import normalizar
 
 logging.basicConfig(
     level=logging.INFO,
@@ -207,22 +208,39 @@ def rodar_tier3(cfg: dict):
     aprovados = scorer_leilao.filtrar_e_ordenar(listings, cfg)
     logger.info(f"⭐ {len(aprovados)} aprovados")
 
-    # Dashboard local (uma aba por fonte — Caixa/Resale). Mesma lógica
-    # de segurança do Tier 1: nunca pode derrubar a rodada por causa
-    # disso. Ver notifier/dashboard.py — Tier 1 e Tier 3 rodam em
-    # invocações separadas de main.py, então cada um só atualiza a
-    # própria seção (mercado/leilão) do dashboard, sem apagar a outra.
-    fonte_labels = {"caixa_leilao": "Caixa", "resale": "Resale"}
-    resultados_por_fonte: dict = {}
-    for r in aprovados:
-        label = fonte_labels.get(r.listing.fonte, r.listing.fonte.title())
-        resultados_por_fonte.setdefault(label, []).append(r)
+    # Dashboard local (uma aba por cidade, igual ao Mercado; a fonte —
+    # Caixa/Resale — aparece no próprio card). Mesma lógica de segurança
+    # do Tier 1: nunca pode derrubar a rodada por causa disso. Ver
+    # notifier/dashboard.py — Tier 1 e Tier 3 rodam em invocações
+    # separadas de main.py, então cada um só atualiza a própria seção
+    # (mercado/leilão) do dashboard, sem apagar a outra.
+    resultados_por_cidade = _agrupar_leilao_por_cidade(
+        aprovados, cfg.get("leilao", {}).get("cidades", []),
+    )
 
     try:
-        caminho = dashboard.salvar_e_abrir(resultados_leilao=resultados_por_fonte)
+        caminho = dashboard.salvar_e_abrir(resultados_leilao=resultados_por_cidade)
         logger.info(f"📊 Dashboard: {caminho}")
     except Exception as e:
         logger.warning(f"Falha ao gerar dashboard (não crítico): {e}")
+
+
+def _agrupar_leilao_por_cidade(aprovados: list, cidades_cfg: list) -> dict:
+    """
+    Agrupa aprovados de leilão por cidade, na ordem de leilao.cidades.
+    Caixa devolve a cidade em caixa alta/sem acento ("SAO PAULO") e a
+    Resale com acento — normaliza pra casar com o nome canônico do
+    config; cidade fora da lista mantém o texto original.
+    """
+    canonico = {normalizar(c): c for c in cidades_cfg}
+    grupos: dict = {}
+    for r in aprovados:
+        bruto = r.listing.cidade or "Cidade não informada"
+        nome = canonico.get(normalizar(bruto), bruto)
+        grupos.setdefault(nome, []).append(r)
+
+    ordem = {c: i for i, c in enumerate(cidades_cfg)}
+    return dict(sorted(grupos.items(), key=lambda kv: ordem.get(kv[0], len(ordem))))
 
 
 # ── Entry point ───────────────────────────────────────────────

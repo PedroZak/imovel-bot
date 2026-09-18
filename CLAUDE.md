@@ -645,6 +645,36 @@ cronológica:
     o cache pra valer; até lá, rodar só Tier 3 ainda mostraria Mercado
     vazio uma última vez.
 
+19. **Histórico de preços contava o mesmo anúncio a cada rodada
+    (18/09/2026)** — ao validar a calibragem na nuvem, Piracicaba
+    atingiu o mínimo de 15 amostras com só 3–4 rodadas e a mediana
+    móvel já deu saltos de ±30% (Centro −33%, São Dimas +34%), que
+    entram direto no score. Causa: `utils/historico.py:registrar_listings`
+    inseria TODO listing coletado em TODA rodada, sem deduplicar — a
+    mesma foto do mercado repetida N vezes, não N amostras
+    independentes. Fix: coluna `listing_id` + índice único
+    `(fonte, listing_id)` + `INSERT OR IGNORE` — cada anúncio conta uma
+    vez (na primeira aparição). `_migrar_listing_id()` adiciona a coluna
+    em bancos antigos e **descarta as linhas antigas sem id** (sem id
+    não dá pra deduplicar; eram dado enviesado). Consequência esperada:
+    Campinas/Piracicaba voltam a "amostras insuficientes" (mantêm o
+    valor manual do config) até o histórico se reconstruir com anúncios
+    distintos — não é regressão.
+    Limitação conhecida: mediana é de preço de ANÚNCIO, não de ITBI
+    (fechamento) — sempre acima do Atlas; por isso não é usada como
+    fallback pra SP capital (ver Paraíso abaixo).
+    **Paraíso**: `atlasdados.com/sp/bairro/paraiso/` dá 404 e nenhuma
+    variante de slug existe (Atlas não trata como bairro autônomo).
+    Sem fonte ITBI pública; `compra_m2` fica com a estimativa manual do
+    config.yaml (10500, "interpolado").
+
+20. **Aba Leilão agora é dividida por cidade, não por fonte
+    (18/09/2026)** — pedido do usuário, mesmo filtro do Mercado.
+    `main.py:_agrupar_leilao_por_cidade()` agrupa por `listing.cidade`
+    na ordem de `leilao.cidades`; normaliza acento/caixa porque a Caixa
+    devolve "SAO PAULO" e a Resale "São Paulo". Fonte (Caixa/Resale)
+    continua visível no próprio card.
+
 ## Backlog conhecido (não resolvido, com contexto)
 
 - **Campinas/Piracicaba com calibragem fraca** — sem fonte tipo Atlas

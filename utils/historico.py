@@ -41,13 +41,37 @@ def inicializar(db_path: str):
             preco       REAL NOT NULL,
             area        REAL NOT NULL,
             preco_m2    REAL NOT NULL,
-            coletado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            coletado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            listing_id  TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_precos_bairro
             ON precos_historico(bairro, coletado_em);
     """)
+    _migrar_listing_id(conn)
     conn.commit()
     conn.close()
+
+
+def _migrar_listing_id(conn):
+    """
+    Bancos criados antes de 18/09/2026 não têm listing_id — e gravavam o
+    MESMO anúncio de novo a cada rodada, inflando a contagem de amostras
+    e enviesando a mediana. Adiciona a coluna e descarta as linhas
+    antigas (sem id não dá pra deduplicar; são dado enviesado, e o
+    histórico se reconstrói sozinho nas próximas rodadas).
+    """
+    colunas = {r[1] for r in conn.execute("PRAGMA table_info(precos_historico)")}
+    if "listing_id" not in colunas:
+        conn.execute("ALTER TABLE precos_historico ADD COLUMN listing_id TEXT")
+    removidas = conn.execute(
+        "DELETE FROM precos_historico WHERE listing_id IS NULL"
+    ).rowcount
+    if removidas:
+        logger.info(f"Histórico: {removidas} linha(s) antigas sem listing_id descartadas")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_precos_unico "
+        "ON precos_historico(fonte, listing_id)"
+    )
 
 
 def registrar_listings(
@@ -62,6 +86,9 @@ def registrar_listings(
     que a mediana fica na mesma chave usada em bairros_referencia).
     Listings cujo bairro não bate com nenhuma referência conhecida
     são ignorados (não sabemos onde tabular).
+
+    Cada anúncio (fonte + id) é gravado UMA vez só, na primeira vez que
+    aparece — rodar o bot várias vezes seguidas não repete amostra.
     """
     conn = sqlite3.connect(db_path)
     gravados = 0
@@ -74,17 +101,17 @@ def registrar_listings(
             continue
 
         preco_m2 = l.preco / l.area
-        conn.execute(
-            """INSERT INTO precos_historico
-               (bairro, regiao, fonte, preco, area, preco_m2)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (bairro_key, regiao, l.fonte, l.preco, l.area, preco_m2),
+        cur = conn.execute(
+            """INSERT OR IGNORE INTO precos_historico
+               (bairro, regiao, fonte, preco, area, preco_m2, listing_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (bairro_key, regiao, l.fonte, l.preco, l.area, preco_m2, str(l.id)),
         )
-        gravados += 1
+        gravados += cur.rowcount
 
     conn.commit()
     conn.close()
-    logger.info(f"Histórico: {gravados}/{len(listings)} listings gravados"
+    logger.info(f"Histórico: {gravados}/{len(listings)} listings novos gravados"
                 + (f" [{regiao}]" if regiao else ""))
 
 
