@@ -42,6 +42,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 REFERENCIAS_CALIBRADAS_PATH = "referencias_calibradas.yaml"
+
+_MESES_ABREV = {1: "Jan", 2: "Fev", 3: "Mar", 4: "Abr", 5: "Mai", 6: "Jun",
+                7: "Jul", 8: "Ago", 9: "Set", 10: "Out", 11: "Nov", 12: "Dez"}
+
+
+def _fmt_data_curta(dt: datetime) -> str:
+    """'22/Set' — sem hora nem ano, pro header não ocupar espaço à toa.
+    Mês abreviado em pt-BR na mão (não dá pra confiar em locale do SO)."""
+    return f"{dt.day:02d}/{_MESES_ABREV[dt.month]}"
 _CACHE_MERCADO = "data/_dash_cache_mercado.html"
 _CACHE_LEILAO  = "data/_dash_cache_leilao.html"
 
@@ -138,7 +147,7 @@ def _abrir_no_chrome(url: str) -> bool:
 # ── Montagem do documento ────────────────────────────────────────
 
 def _montar_html(resultados_mercado: Optional[dict], resultados_leilao: Optional[dict]) -> str:
-    gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    gerado_em = _fmt_data_curta(datetime.now())
     calibracao = _ler_data_calibragem()
 
     mercado_html, mercado_qtd = _preparar_tier(
@@ -187,7 +196,7 @@ def _montar_html(resultados_mercado: Optional[dict], resultados_leilao: Optional
       <button type="button" id="theme-toggle" class="theme-toggle" onclick="alternarTema()" title="Alternar modo escuro">🌙</button>
     </div>
   </div>
-  <div class="header-meta">🕐 {gerado_em} &nbsp;·&nbsp; 🔧 Calibrado em {_esc(calibracao)}</div>
+  <div class="header-meta">📅 {gerado_em} &nbsp;·&nbsp; 🔧 Calibrado em {_esc(calibracao)}</div>
 </header>
 
 <div id="modal-config" class="modal-overlay" style="display:none" onclick="if(event.target===this) fecharConfig()">
@@ -246,7 +255,7 @@ def _ler_data_calibragem(path: str = REFERENCIAS_CALIBRADAS_PATH) -> str:
         if not bruto:
             return "nunca rodada"
         dt = datetime.fromisoformat(str(bruto))
-        return dt.strftime("%d/%m/%Y %H:%M") + (" UTC" if dt.tzinfo else "")
+        return _fmt_data_curta(dt)
     except FileNotFoundError:
         return "nunca rodada"
     except Exception as e:

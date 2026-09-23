@@ -711,6 +711,15 @@ cronológica:
     sintético local — abas ficam visíveis quase imediatamente após o
     cabeçalho agora.
 
+23. **Datas do header sem hora, mês abreviado em pt-BR (22/09/2026)** —
+    pedido do usuário: "Gerado em"/"Calibrado em" mostravam data+hora
+    completas (`22/09/2026 21:22:45`), ocupando espaço à toa já que o
+    header foi comprimido no item #22. `_fmt_data_curta()` novo em
+    `notifier/dashboard.py` formata só `DD/Mês` (ex: `22/Set`), com
+    mês abreviado num dict manual (`_MESES_ABREV`) — não dá pra confiar
+    em `strftime("%b")`/locale do sistema, especialmente no runner do
+    GitHub Actions (locale en-US por padrão, daria "Sep" não "Set").
+
 ## Backlog conhecido (não resolvido, com contexto)
 
 - **Campinas/Piracicaba com calibragem fraca** — sem fonte tipo Atlas
