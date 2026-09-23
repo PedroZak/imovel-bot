@@ -748,6 +748,40 @@ cronológica:
     hipotético continuam corretamente rejeitados (None), não casam com
     os alvos.
 
+25. **Cards redesenhados seguindo padrões comuns de apps de imóveis
+    (23/09/2026)** — pedido do usuário ("usa mobbin pra dar ideia de
+    design"). Mobbin MCP exigia plano pago que o usuário não tem
+    (`mcp__...__search_screens` retornou erro de upgrade necessário);
+    segui com padrões conhecidos de apps do setor (QuintoAndar, Loft,
+    Zillow) sem a ferramenta. Mudanças em `_montar_card_mercado`/
+    `_montar_card_leilao`:
+    - Badges de fonte e score passaram a ficar SOBRE a foto (canto
+      superior esquerdo/direito, `position:absolute`), não mais como
+      texto no corpo do card — libera espaço vertical e é o padrão
+      universal desses apps (selo "bom negócio"/nota no canto da foto).
+    - Preço virou o elemento mais proeminente do corpo (`.card-preco`,
+      1.25rem/700), título (endereço/descrição) virou secundário/muted
+      logo abaixo — antes era o oposto (título em negrito, preço só
+      mais um item da lista de stats). Todo app de imóvel lidera com
+      preço, não com o texto do anúncio.
+    - Breakdown de score + justificativas + flip-box (Mercado) e
+      breakdown + justificativas (Leilão) viraram um único
+      `<details class="card-detalhes">` colapsado por padrão — mesmo
+      padrão já usado nos filtros (ver item #22). Card fica escaneável;
+      quem quer entender O PORQUÊ do score expande.
+      **Decisão de produto importante**: no card de Leilão, `alertas`
+      (situação de ocupação desconhecida, risco jurídico) FICOU FORA do
+      `<details>`, sempre visível — informação de risco não pode ficar
+      escondida atrás de um toque extra, diferente da racionalização do
+      score, que é só contexto opcional.
+    - "Ver anúncio"/"Ver edital" virou botão de largura total
+      (background accent, texto branco) em vez de link de texto —
+      CTA mais óbvio, também padrão universal do setor.
+    Testado visualmente (mobile 375px e desktop, claro e escuro) com
+    dado sintético local (2 cards de mercado com/sem foto, 1 leilão com
+    alerta de risco) — badges legíveis nos dois temas, `<details>` abre/
+    fecha certo, alerta de risco permanece visível com o painel fechado.
+
 ## Backlog conhecido (não resolvido, com contexto)
 
 - **Campinas/Piracicaba com calibragem fraca** — sem fonte tipo Atlas

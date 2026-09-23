@@ -380,16 +380,21 @@ def _montar_card_mercado(r: "ScoreResult") -> str:
 
     just_html = "".join(f"<li>{_esc(j)}</li>" for j in r.justificativas)
     justificativas_html = f'<ul class="justificativas">{just_html}</ul>' if just_html else ""
+    detalhes_html = _montar_breakdown(r.breakdown) + justificativas_html + _montar_flip(r)
 
     return f"""<article class="card" data-score="{r.score}" data-preco="{l.preco or ''}" \
 data-area="{l.area or ''}" data-precom2="{l.preco_m2 or ''}">
-  <div class="card-foto">{foto_html}</div>
+  <div class="card-foto">
+    {foto_html}
+    <span class="badge-foto badge-fonte-foto" title="Fonte: {l.fonte}">{fonte_emoji}</span>
+    <span class="badge-foto badge-score-foto {_tier_score(r.score)}">⭐ {r.score:.0f}</span>
+  </div>
   <div class="card-corpo">
-    <div class="card-titulo">{fonte_emoji} {_esc(l.titulo)}</div>
+    <div class="card-preco">{_fmt_brl(l.preco)}</div>
+    <div class="card-titulo">{_esc(l.titulo)}</div>
     <div class="card-local">📍 {_esc(l.bairro)}, {_esc(l.cidade)}</div>
     <div class="card-stats">
-      <span><b>{_fmt_brl(l.preco)}</b></span>
-      <span>{_fmt_m2(l.area)}</span>
+      <span>📐 {_fmt_m2(l.area)}</span>
       <span>🛏 {l.quartos if l.quartos is not None else '?'}q</span>
       <span>🚿 {l.banheiros if l.banheiros is not None else '?'}bh</span>
       <span>🚗 {l.vagas}</span>
@@ -400,12 +405,10 @@ data-area="{l.area or ''}" data-precom2="{l.preco_m2 or ''}">
       <span>🏛 IPTU: {_fmt_brl(l.iptu)}/ano</span>
     </div>
     {_montar_delta_bairro(r)}
-    <div class="card-score">
-      <span class="score-badge {_tier_score(r.score)}">⭐ {r.score:.1f}/100</span>
-    </div>
-    {_montar_breakdown(r.breakdown)}
-    {justificativas_html}
-    {_montar_flip(r)}
+    <details class="card-detalhes">
+      <summary>📊 Pontuação e análise</summary>
+      <div class="card-detalhes-corpo">{detalhes_html}</div>
+    </details>
     <a class="card-link" href="{_esc(l.url)}" target="_blank" rel="noopener noreferrer">
       Ver anúncio ({l.fonte.upper()}) →
     </a>
@@ -507,30 +510,34 @@ def _montar_card_leilao(r: "LeilaoScoreResult") -> str:
 
     alertas_html = "".join(f'<li class="{_classe_alerta(a)}">{_esc(a)}</li>' for a in r.alertas)
     alertas_bloco = f'<ul class="alertas">{alertas_html}</ul>' if alertas_html else ""
+    detalhes_html = _montar_breakdown(r.breakdown, _CRITERIOS_LEILAO) + justificativas_html
 
     return f"""<article class="card" data-score="{r.score}" data-preco="{l.preco or ''}" \
 data-area="{l.area or ''}" data-precom2="">
-  <div class="card-foto">{foto_html}</div>
+  <div class="card-foto">
+    {foto_html}
+    <span class="badge-foto badge-fonte-foto" title="Fonte: {fonte_label}">{fonte_emoji}</span>
+    <span class="badge-foto badge-score-foto {_tier_score(r.score)}">⭐ {r.score:.0f}</span>
+  </div>
   <div class="card-corpo">
-    <div class="card-titulo">{fonte_emoji} {_esc(l.titulo)} <span class="fonte-badge">{_esc(fonte_label)}</span></div>
+    <div class="card-preco">{_fmt_brl(l.preco)} <span class="fonte-badge">{_esc(fonte_label)}</span></div>
+    <div class="card-titulo">{_esc(l.titulo)}</div>
     <div class="card-local">📍 {_esc(l.bairro)}, {_esc(l.cidade)}</div>
     <div class="card-stats">
-      <span><b>{_fmt_brl(l.preco)}</b></span>
-      <span>{_fmt_m2(l.area)}</span>
+      <span>📐 {_fmt_m2(l.area)}</span>
       <span>🛏 {l.quartos if l.quartos is not None else '?'}q</span>
+      <span>📉 {l.desconto_pct:.1f}% desconto</span>
     </div>
     <div class="card-stats secundario">
       <span>📋 Aval: {_fmt_brl(l.avaliacao)}</span>
-      <span>📉 Desconto: {l.desconto_pct:.1f}%</span>
       <span>{_esc(l.modalidade)}</span>
     </div>
     <div class="card-situacao {sit_classe}">{sit_emoji} {_esc(l.situacao)}</div>
-    <div class="card-score">
-      <span class="score-badge {_tier_score(r.score)}">⭐ {r.score:.1f}/100</span>
-    </div>
-    {_montar_breakdown(r.breakdown, _CRITERIOS_LEILAO)}
-    {justificativas_html}
     {alertas_bloco}
+    <details class="card-detalhes">
+      <summary>📊 Pontuação e análise</summary>
+      <div class="card-detalhes-corpo">{detalhes_html}</div>
+    </details>
     <a class="card-link" href="{_esc(l.url_edital)}" target="_blank" rel="noopener noreferrer">
       Ver edital ({_esc(fonte_label)}) →
     </a>
@@ -674,12 +681,24 @@ main { padding: 1.25rem 1.5rem 3rem; max-width: 1400px; margin: 0 auto; }
 
 .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
         overflow: hidden; display: flex; flex-direction: column; }
+.card-foto { position: relative; }
 .card-foto img { width: 100%; height: 170px; object-fit: cover; display: block; }
 .card-foto .sem-foto { width: 100%; height: 170px; display: flex; align-items: center;
                         justify-content: center; background: var(--sem-foto-bg); color: var(--muted);
                         font-size: 0.85rem; }
-.card-corpo { padding: 0.9rem 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.5rem; }
-.card-titulo { font-weight: 600; font-size: 0.98rem; line-height: 1.3; }
+/* Badges sobre a foto — padrão comum em apps de imóveis (fonte do
+   anúncio + selo de pontuação no canto, em vez de mais uma linha de
+   texto no corpo do card). */
+.badge-foto { position: absolute; top: 0.5rem; padding: 0.2rem 0.55rem; border-radius: 999px;
+              font-size: 0.78rem; font-weight: 700; line-height: 1.4; }
+.badge-fonte-foto { left: 0.5rem; background: rgba(0,0,0,0.55); color: #fff; backdrop-filter: blur(2px); }
+.badge-score-foto { right: 0.5rem; color: #fff; }
+.badge-score-foto.tier-alto  { background: var(--tier-alto); }
+.badge-score-foto.tier-medio { background: var(--tier-medio); }
+.badge-score-foto.tier-base  { background: var(--tier-base); }
+.card-corpo { padding: 0.9rem 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.card-preco { font-size: 1.25rem; font-weight: 700; }
+.card-titulo { color: var(--muted); font-size: 0.85rem; line-height: 1.35; }
 .card-local { color: var(--muted); font-size: 0.85rem; }
 .card-stats { display: flex; flex-wrap: wrap; gap: 0.6rem; font-size: 0.9rem; }
 .card-stats.secundario { color: var(--muted); font-size: 0.82rem; }
@@ -687,20 +706,23 @@ main { padding: 1.25rem 1.5rem 3rem; max-width: 1400px; margin: 0 auto; }
 .card-delta.delta-baixo  { color: var(--tier-alto); }
 .card-delta.delta-alto   { color: var(--danger); }
 .card-delta.delta-neutro { color: var(--muted); }
-.card-score { margin-top: 0.2rem; }
-.score-badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 999px;
-               color: #fff; font-weight: 600; font-size: 0.85rem; }
-.score-badge.tier-alto  { background: var(--tier-alto); }
-.score-badge.tier-medio { background: var(--tier-medio); }
-.score-badge.tier-base  { background: var(--tier-base); }
 
-.breakdown, .justificativas, .alertas { list-style: none; margin: 0; padding: 0.6rem 0 0;
-                               border-top: 1px dashed var(--border); font-size: 0.82rem; }
+/* Detalhe de pontuação — colapsado por padrão, mesmo padrão do bloco
+   de filtros: card fica escaneável, quem quiser a razão do score expande. */
+.card-detalhes { border-top: 1px dashed var(--border); padding-top: 0.5rem; }
+.card-detalhes summary { list-style: none; cursor: pointer; font-size: 0.82rem; font-weight: 600;
+                          color: var(--accent); }
+.card-detalhes summary::-webkit-details-marker { display: none; }
+.card-detalhes summary::after { content: " ▾"; }
+.card-detalhes[open] summary::after { content: " ▴"; }
+.card-detalhes-corpo { padding-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.breakdown, .justificativas, .alertas { list-style: none; margin: 0; padding: 0; font-size: 0.82rem; }
 .breakdown li { display: flex; justify-content: space-between; padding: 0.1rem 0; color: var(--muted); }
 .justificativas { display: flex; flex-direction: column; gap: 0.2rem; }
 .justificativas li { color: var(--fg); }
-.alertas { display: flex; flex-direction: column; gap: 0.3rem; border-top-style: solid;
-           border-top-color: var(--danger); }
+.alertas { display: flex; flex-direction: column; gap: 0.3rem; padding-top: 0.4rem;
+           border-top: 1px solid var(--danger); }
 .alertas li { font-weight: 500; }
 .alertas li.alerta-risco { color: var(--danger); }
 .alertas li.alerta-info  { color: var(--tier-alto); }
@@ -722,9 +744,10 @@ main { padding: 1.25rem 1.5rem 3rem; max-width: 1400px; margin: 0 auto; }
 .flip-box.flip-apertado { border-color: var(--tier-medio); background: var(--flip-apertado-bg); }
 .flip-box.flip-ruim     { border-color: var(--danger); background: var(--flip-ruim-bg); }
 
-.card-link { margin-top: 0.4rem; color: var(--accent); font-weight: 600; font-size: 0.88rem;
-             text-decoration: none; }
-.card-link:hover { text-decoration: underline; }
+.card-link { margin-top: 0.4rem; display: block; text-align: center; padding: 0.55rem 0.8rem;
+             border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600;
+             font-size: 0.88rem; text-decoration: none; }
+.card-link:hover { filter: brightness(1.08); }
 
 /* Celular: cabeçalho e área útil mais compactos, um card por linha
    (já cai sozinho via minmax do grid, isso só ajusta respiro/fonte) */
