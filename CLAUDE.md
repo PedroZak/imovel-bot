@@ -692,6 +692,25 @@ cronológica:
     anúncios NOVOS desde a última vez — não fica variando a cada clique
     sem motivo.
 
+22. **Cabeçalho e filtros redesenhados pra ocupar menos espaço no celular
+    (22/09/2026)** — pedido do usuário com print do dashboard no
+    celular: cabeçalho (título + "Gerado em" + "Última calibração" em
+    linhas separadas) e o bloco de filtros (5 campos empilhados full-
+    width) empurravam as abas Mercado/Leilão pra fora da tela.
+    - Cabeçalho: título + botões (Rodar agora/⚙/🌙) numa linha só
+      (`.header-top`); "Gerado em"/"Calibrado em" viraram uma única
+      linha pequena e muted (`.header-meta`) embaixo, em vez de 2
+      `<span>` competindo por espaço com os botões.
+    - Filtros: `_montar_controles()` virou um `<details>`/`<summary>`
+      nativo (`🔍 Filtros e ordenação`), fechado por padrão — sem JS
+      extra pra abrir/fechar. Adicionado `#filtros-badge` (atualizado
+      em `atualizar()`) mostrando quantos filtros de preço/área estão
+      ativos MESMO com o painel fechado, pra não esconder que um filtro
+      está aplicado.
+    Testado visualmente (mobile 375px, desktop, claro/escuro) com dado
+    sintético local — abas ficam visíveis quase imediatamente após o
+    cabeçalho agora.
+
 ## Backlog conhecido (não resolvido, com contexto)
 
 - **Campinas/Piracicaba com calibragem fraca** — sem fonte tipo Atlas

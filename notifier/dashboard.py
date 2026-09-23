@@ -179,12 +179,15 @@ def _montar_html(resultados_mercado: Optional[dict], resultados_leilao: Optional
 </head>
 <body>
 <header>
-  <h1>🏠 imovel-bot</h1>
-  <span class="gerado-em">Gerado em {gerado_em}</span>
-  <span class="gerado-em">🔧 Última calibração de preços: {_esc(calibracao)}</span>
-  <button type="button" id="btn-rodar" class="btn-rodar" onclick="rodarAgora()" title="Disparar uma rodada agora via GitHub Actions">▶ Rodar agora</button>
-  <button type="button" class="btn-config" onclick="abrirConfig()" title="Configurar token de acesso">⚙</button>
-  <button type="button" id="theme-toggle" class="theme-toggle" onclick="alternarTema()" title="Alternar modo escuro">🌙</button>
+  <div class="header-top">
+    <h1>🏠 imovel-bot</h1>
+    <div class="header-actions">
+      <button type="button" id="btn-rodar" class="btn-rodar" onclick="rodarAgora()" title="Disparar uma rodada agora via GitHub Actions">▶ Rodar agora</button>
+      <button type="button" class="btn-config" onclick="abrirConfig()" title="Configurar token de acesso">⚙</button>
+      <button type="button" id="theme-toggle" class="theme-toggle" onclick="alternarTema()" title="Alternar modo escuro">🌙</button>
+    </div>
+  </div>
+  <div class="header-meta">🕐 {gerado_em} &nbsp;·&nbsp; 🔧 Calibrado em {_esc(calibracao)}</div>
 </header>
 
 <div id="modal-config" class="modal-overlay" style="display:none" onclick="if(event.target===this) fecharConfig()">
@@ -308,25 +311,28 @@ def _montar_tier_panel(slug: str, indice: int, conteudo: str) -> str:
 
 
 def _montar_controles() -> str:
-    return """<div class="controles">
-  <label>Ordenar por
-    <select id="ordenar" onchange="atualizar()">
-      <option value="score-desc">Score (maior primeiro)</option>
-      <option value="score-asc">Score (menor primeiro)</option>
-      <option value="preco-asc">Preço (menor primeiro)</option>
-      <option value="preco-desc">Preço (maior primeiro)</option>
-      <option value="area-desc">Área (maior primeiro)</option>
-      <option value="area-asc">Área (menor primeiro)</option>
-      <option value="precom2-asc">Preço/m² (menor primeiro)</option>
-      <option value="precom2-desc">Preço/m² (maior primeiro)</option>
-    </select>
-  </label>
-  <label>Preço min. <input type="number" id="preco-min" oninput="atualizar()" placeholder="R$"></label>
-  <label>Preço máx. <input type="number" id="preco-max" oninput="atualizar()" placeholder="R$"></label>
-  <label>Área min. <input type="number" id="area-min" oninput="atualizar()" placeholder="m²"></label>
-  <label>Área máx. <input type="number" id="area-max" oninput="atualizar()" placeholder="m²"></label>
-  <button type="button" onclick="limparFiltros()">Limpar filtros</button>
-</div>"""
+    return """<details class="controles">
+  <summary>🔍 Filtros e ordenação <span id="filtros-badge" class="filtros-badge" hidden></span></summary>
+  <div class="controles-corpo">
+    <label>Ordenar por
+      <select id="ordenar" onchange="atualizar()">
+        <option value="score-desc">Score (maior primeiro)</option>
+        <option value="score-asc">Score (menor primeiro)</option>
+        <option value="preco-asc">Preço (menor primeiro)</option>
+        <option value="preco-desc">Preço (maior primeiro)</option>
+        <option value="area-desc">Área (maior primeiro)</option>
+        <option value="area-asc">Área (menor primeiro)</option>
+        <option value="precom2-asc">Preço/m² (menor primeiro)</option>
+        <option value="precom2-desc">Preço/m² (maior primeiro)</option>
+      </select>
+    </label>
+    <label>Preço min. <input type="number" id="preco-min" oninput="atualizar()" placeholder="R$"></label>
+    <label>Preço máx. <input type="number" id="preco-max" oninput="atualizar()" placeholder="R$"></label>
+    <label>Área min. <input type="number" id="area-min" oninput="atualizar()" placeholder="m²"></label>
+    <label>Área máx. <input type="number" id="area-max" oninput="atualizar()" placeholder="m²"></label>
+    <button type="button" onclick="limparFiltros()">Limpar filtros</button>
+  </div>
+</details>"""
 
 
 def _montar_tab_nav(nomes: list, slugs: dict, regioes: dict) -> str:
@@ -582,15 +588,16 @@ _CSS = """
 * { box-sizing: border-box; }
 body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
        background: var(--bg); color: var(--fg); }
-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1rem;
-         padding: 1.25rem 1.5rem; background: var(--card-bg); border-bottom: 1px solid var(--border); }
-header h1 { margin: 0; font-size: 1.4rem; white-space: nowrap; }
-.gerado-em { color: var(--muted); font-size: 0.85rem; }
-.theme-toggle { margin-left: auto; border: 1px solid var(--border); background: var(--card-bg);
+header { padding: 0.85rem 1.5rem; background: var(--card-bg); border-bottom: 1px solid var(--border); }
+.header-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+header h1 { margin: 0; font-size: 1.25rem; white-space: nowrap; }
+.header-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+.header-meta { margin-top: 0.3rem; color: var(--muted); font-size: 0.76rem; line-height: 1.4; }
+.theme-toggle { border: 1px solid var(--border); background: var(--card-bg);
                 border-radius: 999px; width: 2.2rem; height: 2.2rem; font-size: 1.1rem;
-                cursor: pointer; line-height: 1; }
+                cursor: pointer; line-height: 1; flex-shrink: 0; }
 .theme-toggle:hover { background: var(--bg); }
-.btn-rodar { margin-left: auto; border: 1px solid var(--accent); background: var(--accent);
+.btn-rodar { border: 1px solid var(--accent); background: var(--accent);
              color: #fff; border-radius: 999px; padding: 0 1rem; height: 2.2rem; font-size: 0.85rem;
              font-weight: 600; cursor: pointer; white-space: nowrap; }
 .btn-rodar:hover { filter: brightness(1.08); }
@@ -619,19 +626,27 @@ header h1 { margin: 0; font-size: 1.4rem; white-space: nowrap; }
 main { padding: 1.25rem 1.5rem 3rem; max-width: 1400px; margin: 0 auto; }
 .vazio { text-align: center; padding: 4rem 1rem; color: var(--muted); font-size: 1.1rem; }
 
-.controles { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin-bottom: 1rem;
-             padding: 0.9rem 1rem; background: var(--card-bg); border: 1px solid var(--border);
+.controles { margin-bottom: 1rem; background: var(--card-bg); border: 1px solid var(--border);
              border-radius: 10px; }
-.controles label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.78rem;
+.controles summary { list-style: none; cursor: pointer; padding: 0.65rem 1rem; font-size: 0.85rem;
+                      font-weight: 600; color: var(--fg); display: flex; align-items: center; gap: 0.4rem; }
+.controles summary::-webkit-details-marker { display: none; }
+.controles summary::after { content: "▾"; margin-left: auto; color: var(--muted); }
+.controles[open] summary::after { content: "▴"; }
+.controles[open] summary { border-bottom: 1px solid var(--border); }
+.filtros-badge { background: var(--accent); color: #fff; border-radius: 999px; font-size: 0.72rem;
+                  font-weight: 700; padding: 0.05rem 0.45rem; }
+.controles-corpo { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; padding: 0.9rem 1rem; }
+.controles-corpo label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.78rem;
                     color: var(--muted); }
-.controles select, .controles input { padding: 0.35rem 0.5rem; border: 1px solid var(--border);
+.controles-corpo select, .controles-corpo input { padding: 0.35rem 0.5rem; border: 1px solid var(--border);
                                        border-radius: 6px; font-size: 0.85rem; color: var(--fg);
                                        background: var(--card-bg); }
-.controles input[type=number] { width: 6.5rem; }
-.controles button { padding: 0.4rem 0.9rem; border: 1px solid var(--border); border-radius: 6px;
+.controles-corpo input[type=number] { width: 6.5rem; }
+.controles-corpo button { padding: 0.4rem 0.9rem; border: 1px solid var(--border); border-radius: 6px;
                      background: var(--card-bg); cursor: pointer; font-size: 0.82rem; color: var(--fg);
                      align-self: flex-end; }
-.controles button:hover { background: var(--bg); }
+.controles-corpo button:hover { background: var(--bg); }
 
 .tier-nav { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.25rem;
             border-bottom: 2px solid var(--border); padding-bottom: 0.75rem; }
@@ -705,12 +720,12 @@ main { padding: 1.25rem 1.5rem 3rem; max-width: 1400px; margin: 0 auto; }
 /* Celular: cabeçalho e área útil mais compactos, um card por linha
    (já cai sozinho via minmax do grid, isso só ajusta respiro/fonte) */
 @media (max-width: 480px) {
-  header { padding: 1rem; gap: 0.2rem 0.8rem; }
-  header h1 { font-size: 1.2rem; }
-  main { padding: 1rem 1rem 2rem; }
-  .controles { padding: 0.75rem; gap: 0.75rem 1rem; }
-  .controles label, .controles button { width: 100%; }
-  .controles input[type=number] { width: 100%; }
+  header { padding: 0.75rem 1rem; }
+  header h1 { font-size: 1.1rem; }
+  main { padding: 0.85rem 1rem 2rem; }
+  .controles-corpo { padding: 0.75rem; gap: 0.75rem 1rem; }
+  .controles-corpo label, .controles-corpo button { width: 100%; }
+  .controles-corpo input[type=number] { width: 100%; }
   .tab-panel { grid-template-columns: 1fr; }
 }
 """
@@ -747,6 +762,13 @@ function atualizar() {
   var areaMin  = parseFloat(document.getElementById('area-min').value);
   var areaMax  = parseFloat(document.getElementById('area-max').value);
   var ordem    = _ORDENS[document.getElementById('ordenar').value] || _ORDENS['score-desc'];
+
+  var ativos = [precoMin, precoMax, areaMin, areaMax].filter(function(v) { return !isNaN(v); }).length;
+  var badge = document.getElementById('filtros-badge');
+  if (badge) {
+    badge.textContent = ativos;
+    badge.hidden = ativos === 0;
+  }
 
   document.querySelectorAll('.tab-panel').forEach(function(painel) {
     var cards = Array.prototype.slice.call(painel.querySelectorAll('.card'));
