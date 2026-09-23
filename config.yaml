@@ -95,9 +95,19 @@ mercado:
         "Vila Mariana":
           compra_m2: 10801
           aluguel_m2: 76
+        # Paraíso e Vila Clementino não têm página própria no Atlas (404)
+        # — o site trata os dois como parte de Vila Mariana. Pedido do
+        # usuário (22/09/2026): usar o mesmo valor de Vila Mariana pros
+        # dois. calibragem/atlas.py:_ALIAS_ATLAS já busca a página de
+        # Vila Mariana automaticamente quando calibrar esses bairros —
+        # os valores abaixo são só o ponto de partida antes da primeira
+        # calibragem rodar.
         "Paraíso":
-          compra_m2: 10500
-          aluguel_m2: 78     # interpolado (sem dado direto DataZAP) — revisar
+          compra_m2: 10801
+          aluguel_m2: 76
+        "Vila Clementino":
+          compra_m2: 10801
+          aluguel_m2: 76
         "Moema":
           compra_m2: 12727
           aluguel_m2: 80
@@ -179,9 +189,15 @@ bairros_referencia:
   "Vila Mariana":
     compra_m2:  10801
     aluguel_m2: 76
+  # Paraíso e Vila Clementino sem página própria no Atlas (404) — usa o
+  # mesmo valor de Vila Mariana pros dois (pedido do usuário, 22/09/2026;
+  # ver calibragem/atlas.py:_ALIAS_ATLAS).
   "Paraíso":
-    compra_m2:  10500
-    aluguel_m2: 78         # interpolado — sem dado direto DataZAP
+    compra_m2:  10801
+    aluguel_m2: 76
+  "Vila Clementino":
+    compra_m2:  10801
+    aluguel_m2: 76
   "Moema":
     compra_m2:  12727
     aluguel_m2: 80

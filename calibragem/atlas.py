@@ -34,6 +34,16 @@ HEADERS = {
     "Accept-Language": "pt-BR,pt;q=0.9",
 }
 
+# Bairros sem página própria no Atlas (404) — o site trata como parte de
+# outro bairro maior. Confirmado ao vivo (22/09/2026, pedido do usuário):
+# "Paraíso" e "Vila Clementino" caem dentro de "Vila Mariana" no Atlas.
+# buscar_bairro() busca pelo slug do bairro-alias, mas o resultado
+# continua indexado pelo nome ORIGINAL em buscar_todos().
+_ALIAS_ATLAS = {
+    "Paraíso": "Vila Mariana",
+    "Vila Clementino": "Vila Mariana",
+}
+
 # Padrões tentados em ordem — o primeiro que casar múltiplas vezes na
 # página é usado. Procura valor em R$ associado a "área privativa"
 # (não "área construída", que costuma ser um número diferente/menor).
@@ -51,7 +61,7 @@ def buscar_bairro(nome_bairro: str) -> Optional[float]:
     Busca o compra_m2 (ITBI, área privativa) de um bairro no Atlas.
     Retorna None se a página não abrir ou nenhum padrão bater.
     """
-    slug = slugificar(nome_bairro)
+    slug = slugificar(_ALIAS_ATLAS.get(nome_bairro, nome_bairro))
     url = f"{ATLAS_BASE}/{slug}/"
 
     try:

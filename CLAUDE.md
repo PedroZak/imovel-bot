@@ -720,6 +720,34 @@ cronológica:
     em `strftime("%b")`/locale do sistema, especialmente no runner do
     GitHub Actions (locale en-US por padrão, daria "Sep" não "Set").
 
+24. **Vila Clementino adicionado como bairro-alvo de SP capital + alias
+    de Atlas pra bairros sem página própria (22/09/2026)** — dois
+    pedidos do usuário na mesma mensagem:
+    - Descobriu que `atlasdados.com/sp` trata "Paraíso" como parte de
+      "Vila Mariana" (sem página própria, sempre 404 — já documentado
+      desde a calibragem inicial). Pediu pra usar o valor de Vila
+      Mariana pros dois.
+    - Pediu pra adicionar "Vila Clementino" como novo bairro-alvo do
+      filtro de SP capital — confirmei ao vivo que também dá 404 no
+      Atlas (`atlasdados.com/sp/bairro/vila-clementino/`), então usa o
+      mesmo alias.
+    Fix: `calibragem/atlas.py:_ALIAS_ATLAS` (novo) — dict bairro→bairro,
+    `buscar_bairro()` resolve o slug pelo alias mas indexa o resultado
+    pelo nome ORIGINAL em `buscar_todos()`, então tanto "Paraíso" quanto
+    "Vila Clementino" recalibram automaticamente com o valor ao vivo de
+    Vila Mariana a partir de agora (antes, Paraíso ficava travado na
+    estimativa manual porque `atlas.buscar_bairro` sempre retornava
+    `None`). `config.yaml` (região sp_capital E bloco top-level de
+    fallback) ganhou a entrada "Vila Clementino" com o mesmo compra_m2/
+    aluguel_m2 de Vila Mariana como ponto de partida (antes da primeira
+    calibragem rodar).
+    Testado: `resolver_bairro("Vila Clementino", refs)` resolve certo,
+    incluindo dentro de texto livre ("Apartamento em Vila Clementino,
+    São Paulo"); confirmado que NÃO regrediu o fix do bug #13 (bairro
+    composto) — "Jardim Paraíso" e um "Residencial Vila Clementino"
+    hipotético continuam corretamente rejeitados (None), não casam com
+    os alvos.
+
 ## Backlog conhecido (não resolvido, com contexto)
 
 - **Campinas/Piracicaba com calibragem fraca** — sem fonte tipo Atlas
