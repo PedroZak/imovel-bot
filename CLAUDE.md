@@ -675,6 +675,23 @@ cronológica:
     devolve "SAO PAULO" e a Resale "São Paulo". Fonte (Caixa/Resale)
     continua visível no próprio card.
 
+21. **Calibragem passou a rodar junto de toda rodada do "Rodar agora"
+    (22/09/2026)** — pedido do usuário: ele roda tudo pelo GitHub
+    Actions e não queria esperar o cron mensal (`calibragem.yml`, dia
+    1º) pra ver preço de referência atualizado. `rodar-bot.yml` ganhou
+    um passo `python -m calibragem.calibrar` antes de `python main.py`,
+    no MESMO job (reaproveita o `data/vistos.db` já restaurado do
+    cache). Não commita `referencias_calibradas.yaml` de volta — quem
+    persiste isso no repo continua sendo `calibragem.yml`; aqui é só
+    pra essa rodada, escrito no checkout efêmero e lido na sequência
+    por `main.py:_mesclar_calibragem`, no mesmo job. `continue-on-error:
+    true` — falha do Atlas (site fora do ar, por ex.) não pode travar a
+    busca de imóveis. Consequência esperada de "Bugs corrigidos" #19
+    (histórico deduplicado): recalibrar toda hora não distorce mais a
+    mediana, mas Campinas/Piracicaba só mudam de verdade quando surgem
+    anúncios NOVOS desde a última vez — não fica variando a cada clique
+    sem motivo.
+
 ## Backlog conhecido (não resolvido, com contexto)
 
 - **Campinas/Piracicaba com calibragem fraca** — sem fonte tipo Atlas

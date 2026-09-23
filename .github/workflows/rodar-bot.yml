@@ -68,6 +68,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # Recalibra as referências de preço (Atlas + mediana móvel) antes de
+      # cada rodada, não só no agendamento mensal de calibragem.yml — pedido
+      # do usuário, que roda tudo pelo GitHub e não quer esperar o dia 1º
+      # pra ver preço de referência atualizado. Escreve
+      # referencias_calibradas.yaml só no checkout desta rodada (sem
+      # commit — quem persiste no repo continua sendo calibragem.yml,
+      # mensal); main.py:_mesclar_calibragem lê esse arquivo local na
+      # sequência, no mesmo job. continue-on-error pra nunca travar a busca
+      # de imóveis por causa de uma falha do Atlas (ex: site fora do ar).
+      - name: Calibrar referências de preço
+        continue-on-error: true
+        run: python -m calibragem.calibrar
+
       - name: Run bot
         run: python main.py --tier ${{ inputs.tier }}
 
