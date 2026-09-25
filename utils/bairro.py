@@ -26,6 +26,19 @@ _PREFIXOS_BAIRRO_COMPOSTO = {
     "residencial", "condominio", "condomínio", "loteamento",
 }
 
+# Bairros reais DIFERENTES cujo nome contém o de um bairro-alvo como
+# prefixo/sufixo — o filtro de prefixo acima não pega (o nome-alvo vem
+# no INÍCIO, ou depois de uma preposição). Lista explícita em vez de uma
+# regra genérica "alvo + do/da + palavra": essa rejeitaria texto livre
+# legítimo tipo "no Centro da cidade". Cada entrada é removida do texto
+# antes do match (já normalizada: sem acento, minúscula).
+#  - "paraiso do morumbi": bairro à parte (zona sul, perfil bem
+#    diferente do Paraíso da Av. Paulista) — reportado pelo usuário
+#    (25/09/2026).
+#  - "alto de pinheiros": bairro mais caro que Pinheiros; era limitação
+#    conhecida do fix #13, agora coberta.
+_BAIRROS_HOMONIMOS = ("paraiso do morumbi", "alto de pinheiros")
+
 
 def normalizar(txt: str) -> str:
     """Remove acentos, baixa caixa. Usado em toda comparação de texto de bairro."""
@@ -48,6 +61,9 @@ def resolver_bairro(bairro_texto: str, refs: dict) -> Optional[str]:
     tal como está em `refs`, ou None se não encontrar match.
     """
     alvo = normalizar(bairro_texto)
+    for homonimo in _BAIRROS_HOMONIMOS:
+        alvo = re.sub(rf"(?<!\w){re.escape(homonimo)}(?!\w)", " ", alvo)
+    alvo = alvo.strip()
     if not alvo:
         return None
     for chave_ref in refs:

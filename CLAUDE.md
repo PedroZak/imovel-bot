@@ -782,6 +782,22 @@ cronológica:
     alerta de risco) — badges legíveis nos dois temas, `<details>` abre/
     fecha certo, alerta de risco permanece visível com o painel fechado.
 
+26. **"Paraíso do Morumbi" casava com o bairro-alvo "Paraíso"
+    (25/09/2026)** — reportado pelo usuário. Mesma família do bug #13,
+    mas do outro lado: lá o alvo vinha DEPOIS de um prefixo
+    ("Jardim Paraíso"); aqui vem no INÍCIO ("Paraíso do Morumbi", bairro
+    da zona sul, perfil de preço bem diferente do Paraíso da Av.
+    Paulista) — o filtro de prefixo não pega. Fix: `utils/bairro.py:
+    _BAIRROS_HOMONIMOS` (lista explícita, normalizada) — cada entrada é
+    removida do texto antes do match em `resolver_bairro`. Deliberadamente
+    NÃO é uma regra genérica "alvo + do/da + palavra": rejeitaria texto
+    livre legítimo tipo "no Centro da cidade" (Centro é bairro-alvo em
+    Piracicaba) — testado, continua casando. Entradas: `paraiso do
+    morumbi` e `alto de pinheiros` (esta era a "limitação conhecida" do
+    #13, agora coberta — Alto de Pinheiros é mais caro que Pinheiros e
+    gerava desconto falso contra a referência de Pinheiros). Se aparecer
+    outro homônimo, é só acrescentar à tupla.
+
 ## Backlog conhecido (não resolvido, com contexto)
 
 - **Campinas/Piracicaba com calibragem fraca** — sem fonte tipo Atlas
