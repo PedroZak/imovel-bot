@@ -43,6 +43,22 @@ logger = logging.getLogger(__name__)
 
 REFERENCIAS_CALIBRADAS_PATH = "referencias_calibradas.yaml"
 
+# Nome exibido do app (título da aba, topo, nome instalado). Só apresentação:
+# GITHUB_REPO e as chaves de localStorage ('imovel-bot-*') seguem com o nome
+# antigo de propósito — trocá-las apagaria o token que o usuário já salvou.
+_NOME_APP = "Garimpo"
+
+# Marca (losango/gema, mesma de pwa/icon.svg) — inline pra não depender
+# de arquivo externo no dashboard aberto localmente (file://).
+_LOGO_SVG = (
+    '<svg class="logo" viewBox="0 0 64 64" aria-hidden="true">'
+    '<rect width="64" height="64" rx="14" fill="#2563eb"/>'
+    '<polygon points="32,13 47,26 32,51 17,26" fill="none" stroke="#fff" '
+    'stroke-width="3" stroke-linejoin="round"/>'
+    '<path d="M17 26h30M26 26l6-13 6 13M26 26l6 25 6-25" fill="none" '
+    'stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>'
+)
+
 _MESES_ABREV = {1: "Jan", 2: "Fev", 3: "Mar", 4: "Abr", 5: "Mai", 6: "Jun",
                 7: "Jul", 8: "Ago", 9: "Set", 10: "Out", 11: "Nov", 12: "Dez"}
 
@@ -166,6 +182,7 @@ def _montar_html(resultados_mercado: Optional[dict], resultados_leilao: Optional
         corpo = (
             _montar_controles()
             + _montar_tier_nav(tiers)
+            + f'<div class="atualizado">Atualizado {gerado_em}</div>'
             + _montar_tier_panel("mercado", 0, mercado_html)
             + _montar_tier_panel("leilao", 1, leilao_html)
         )
@@ -175,33 +192,35 @@ def _montar_html(resultados_mercado: Optional[dict], resultados_leilao: Optional
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>imovel-bot — dashboard</title>
+<title>{_NOME_APP}</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
 <meta name="theme-color" content="#0f1115">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="imovel-bot">
+<meta name="apple-mobile-web-app-title" content="{_NOME_APP}">
 <script>{_JS_TEMA_INICIAL}</script>
 <style>{_CSS}</style>
 </head>
 <body>
 <header>
   <div class="header-top">
-    <h1>🏠 imovel-bot</h1>
+    {_LOGO_SVG}
+    <h1>{_NOME_APP}</h1>
     <div class="header-actions">
-      <button type="button" id="btn-rodar" class="btn-rodar" onclick="rodarAgora()" title="Disparar uma rodada agora via GitHub Actions">▶ Rodar agora</button>
-      <button type="button" class="btn-config" onclick="abrirConfig()" title="Configurar token de acesso">⚙</button>
-      <button type="button" id="theme-toggle" class="theme-toggle" onclick="alternarTema()" title="Alternar modo escuro">🌙</button>
+      <button type="button" class="btn-config" onclick="abrirConfig()" title="Configurações" aria-label="Configurações">⚙</button>
+      <button type="button" id="theme-toggle" class="theme-toggle" onclick="alternarTema()" title="Alternar modo escuro" aria-label="Alternar modo escuro">🌙</button>
     </div>
   </div>
-  <div class="header-meta">📅 {gerado_em} &nbsp;·&nbsp; 🔧 Calibrado em {_esc(calibracao)}</div>
 </header>
+
+<button type="button" id="btn-rodar" class="btn-rodar" onclick="rodarAgora()" title="Rodar agora (busca novos imóveis via GitHub Actions)" aria-label="Rodar agora">⟳</button>
 
 <div id="modal-config" class="modal-overlay" style="display:none" onclick="if(event.target===this) fecharConfig()">
   <div class="modal">
-    <h2>⚙ Controle remoto</h2>
+    <h2>⚙ Configurações</h2>
+    <p class="modal-hint">🔧 Última calibração de preços: <b>{_esc(calibracao)}</b></p>
     <p class="modal-hint">
       Cole um token de acesso pessoal (fine-grained) do GitHub, com
       permissão <b>Actions: Read and write</b> só neste repositório.
@@ -604,18 +623,21 @@ _CSS = """
 * { box-sizing: border-box; }
 body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
        background: var(--bg); color: var(--fg); }
-header { padding: 0.85rem 1.5rem; background: var(--card-bg); border-bottom: 1px solid var(--border); }
-.header-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
-header h1 { margin: 0; font-size: 1.25rem; white-space: nowrap; }
-.header-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
-.header-meta { margin-top: 0.3rem; color: var(--muted); font-size: 0.76rem; line-height: 1.4; }
+header { padding: 0.7rem 1.5rem; background: var(--card-bg); border-bottom: 1px solid var(--border); }
+.header-top { display: flex; align-items: center; gap: 0.6rem; }
+.logo { width: 1.7rem; height: 1.7rem; flex-shrink: 0; }
+header h1 { margin: 0; font-size: 1.15rem; font-weight: 600; letter-spacing: 0.01em; flex: 1; }
+.header-actions { display: flex; align-items: center; gap: 0.4rem; }
+.atualizado { color: var(--muted); font-size: 0.75rem; margin: -0.6rem 0 0.9rem; }
 .theme-toggle { border: 1px solid var(--border); background: var(--card-bg);
                 border-radius: 999px; width: 2.2rem; height: 2.2rem; font-size: 1.1rem;
                 cursor: pointer; line-height: 1; flex-shrink: 0; }
 .theme-toggle:hover { background: var(--bg); }
-.btn-rodar { border: 1px solid var(--accent); background: var(--accent);
-             color: #fff; border-radius: 999px; padding: 0 1rem; height: 2.2rem; font-size: 0.85rem;
-             font-weight: 600; cursor: pointer; white-space: nowrap; }
+/* Botão flutuante "rodar" — canto inferior direito, ao alcance do polegar. */
+.btn-rodar { position: fixed; right: 1.1rem; bottom: 1.1rem; z-index: 50; width: 3.3rem; height: 3.3rem;
+             border: none; border-radius: 50%; background: var(--accent); color: #fff;
+             font-size: 1.6rem; line-height: 1; cursor: pointer;
+             box-shadow: 0 4px 14px rgba(0,0,0,0.3); }
 .btn-rodar:hover { filter: brightness(1.08); }
 .btn-rodar:disabled { opacity: 0.6; cursor: default; }
 .btn-config { border: 1px solid var(--border); background: var(--card-bg);
@@ -639,7 +661,7 @@ header h1 { margin: 0; font-size: 1.25rem; white-space: nowrap; }
 .modal-botoes button { padding: 0.45rem 1rem; border: 1px solid var(--border); border-radius: 6px;
                         background: var(--bg); color: var(--fg); cursor: pointer; font-size: 0.85rem; }
 .modal-botoes button:first-child { background: var(--accent); border-color: var(--accent); color: #fff; }
-main { padding: 1.25rem 1.5rem 3rem; max-width: 1400px; margin: 0 auto; }
+main { padding: 1.25rem 1.5rem 6rem; max-width: 1400px; margin: 0 auto; }
 .vazio { text-align: center; padding: 4rem 1rem; color: var(--muted); font-size: 1.1rem; }
 
 .controles { margin-bottom: 1rem; background: var(--card-bg); border: 1px solid var(--border);
@@ -753,8 +775,7 @@ main { padding: 1.25rem 1.5rem 3rem; max-width: 1400px; margin: 0 auto; }
    (já cai sozinho via minmax do grid, isso só ajusta respiro/fonte) */
 @media (max-width: 480px) {
   header { padding: 0.75rem 1rem; }
-  header h1 { font-size: 1.1rem; }
-  main { padding: 0.85rem 1rem 2rem; }
+  main { padding: 0.85rem 1rem 6rem; }
   .controles-corpo { padding: 0.75rem; gap: 0.75rem 1rem; }
   .controles-corpo label, .controles-corpo button { width: 100%; }
   .controles-corpo input[type=number] { width: 100%; }
@@ -895,7 +916,7 @@ function rodarAgora() {
   var btn = document.getElementById('btn-rodar');
   btn.disabled = true;
   var textoOriginal = btn.textContent;
-  btn.textContent = '⏳ Disparando...';
+  btn.textContent = '⏳';
 
   fetch('https://api.github.com/repos/' + GITHUB_REPO + '/actions/workflows/' + GITHUB_WORKFLOW + '/dispatches', {
     method: 'POST',
@@ -910,13 +931,13 @@ function rodarAgora() {
     }),
   }).then(function(res) {
     if (res.status === 204) {
-      btn.textContent = '✅ Disparado!';
+      btn.textContent = '✅';
       setTimeout(function() { window.open('https://github.com/' + GITHUB_REPO + '/actions', '_blank'); }, 500);
     } else {
       return res.text().then(function(txt) { throw new Error(res.status + ': ' + txt); });
     }
   }).catch(function(e) {
-    btn.textContent = '❌ Erro';
+    btn.textContent = '❌';
     alert('Falha ao disparar: ' + e.message + '\\n\\nConfira se o token ainda é válido e tem permissão \"Actions: Read and write\" neste repositório.');
   }).finally(function() {
     setTimeout(function() { btn.disabled = false; btn.textContent = textoOriginal; }, 4000);

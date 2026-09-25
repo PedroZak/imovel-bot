@@ -798,6 +798,25 @@ cronológica:
     gerava desconto falso contra a referência de Pinheiros). Se aparecer
     outro homônimo, é só acrescentar à tupla.
 
+27. **Marca "Garimpo" (provisória) + topo minimalista + botão flutuante
+    (25/09/2026)** — pedido do usuário: não gostava do nome
+    "imovel-bot", do logo, do botão "Rodar" no topo e do excesso de
+    texto de data/calibragem. Nome "Garimpo" é PROVISÓRIO ("por hora" —
+    usuário ainda pesquisa outros nomes: mitologia, "casa" em outras
+    línguas etc.); centralizado em `notifier/dashboard.py:_NOME_APP`
+    (+ `pwa/manifest.webmanifest` name/short_name) pra trocar fácil.
+    - Logo: losango/gema em SVG (`_LOGO_SVG` inline no dashboard,
+      `pwa/icon.svg` pro app instalado) — substitui o emoji 🏠.
+    - Topo: só logo + nome + ⚙ + tema, uma linha. "Rodar" virou botão
+      redondo flutuante (`.btn-rodar`, `position:fixed`, canto inferior
+      direito, ícone ⟳; estados ⏳/✅/❌ em vez de texto).
+    - Datas: só "Atualizado DD/Mês" discreto entre as abas e o conteúdo;
+      a data de calibragem foi pro modal ⚙ (agora "Configurações").
+    **NÃO renomeado de propósito**: `GITHUB_REPO`, nome do workflow e as
+    chaves de localStorage (`imovel-bot-pat`, `-tier`, `-tema`) —
+    renomear as chaves apagaria o PAT que o usuário já salvou no
+    celular. O repositório no GitHub também continua `imovel-bot`.
+
 ## Backlog conhecido (não resolvido, com contexto)
 
 - **Campinas/Piracicaba com calibragem fraca** — sem fonte tipo Atlas

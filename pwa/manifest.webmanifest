@@ -1,6 +1,6 @@
 {
-  "name": "imovel-bot",
-  "short_name": "imovel-bot",
+  "name": "Garimpo",
+  "short_name": "Garimpo",
   "description": "Dashboard de imóveis — mercado e leilão",
   "start_url": "./index.html",
   "scope": "./",
