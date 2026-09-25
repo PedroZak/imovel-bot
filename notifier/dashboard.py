@@ -46,17 +46,17 @@ REFERENCIAS_CALIBRADAS_PATH = "referencias_calibradas.yaml"
 # Nome exibido do app (título da aba, topo, nome instalado). Só apresentação:
 # GITHUB_REPO e as chaves de localStorage ('imovel-bot-*') seguem com o nome
 # antigo de propósito — trocá-las apagaria o token que o usuário já salvou.
-_NOME_APP = "Garimpo"
+_NOME_APP = "Domus"
 
-# Marca (losango/gema, mesma de pwa/icon.svg) — inline pra não depender
+# Marca (casa com porta em arco romano, mesma de pwa/icon.svg) — inline pra não depender
 # de arquivo externo no dashboard aberto localmente (file://).
 _LOGO_SVG = (
     '<svg class="logo" viewBox="0 0 64 64" aria-hidden="true">'
     '<rect width="64" height="64" rx="14" fill="#2563eb"/>'
-    '<polygon points="32,13 47,26 32,51 17,26" fill="none" stroke="#fff" '
-    'stroke-width="3" stroke-linejoin="round"/>'
-    '<path d="M17 26h30M26 26l6-13 6 13M26 26l6 25 6-25" fill="none" '
-    'stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>'
+    '<path d="M14 31L32 15l18 16v19H14z" fill="none" stroke="#fff" '
+    'stroke-width="3.5" stroke-linejoin="round"/>'
+    '<path d="M26.5 50V41a5.5 5.5 0 0 1 11 0v9" fill="none" stroke="#fff" '
+    'stroke-width="3" stroke-linejoin="round"/></svg>'
 )
 
 _MESES_ABREV = {1: "Jan", 2: "Fev", 3: "Mar", 4: "Abr", 5: "Mai", 6: "Jun",

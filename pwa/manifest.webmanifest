@@ -1,6 +1,6 @@
 {
-  "name": "Garimpo",
-  "short_name": "Garimpo",
+  "name": "Domus",
+  "short_name": "Domus",
   "description": "Dashboard de imóveis — mercado e leilão",
   "start_url": "./index.html",
   "scope": "./",
