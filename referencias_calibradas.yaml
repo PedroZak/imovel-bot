@@ -1,77 +1,25 @@
 # Gerado automaticamente por calibragem/calibrar.py — não editar à mão.
 # main.py mescla este arquivo com config.yaml na inicialização.
 
-gerado_em: '2026-09-18T16:43:12.269958+00:00'
+gerado_em: '2026-10-01T12:43:53.898787+00:00'
 regions:
   sp_capital:
-    Vila Mariana:
-      compra_m2: 11000.0
+    Paraíso:
+      compra_m2: 11620.0
+      fonte: atlas
+    Vila Clementino:
+      compra_m2: 11620.0
       fonte: atlas
     Moema:
-      compra_m2: 12669.0
+      compra_m2: 13953.0
       fonte: atlas
     Pinheiros:
-      compra_m2: 13407.0
+      compra_m2: 13586.0
       fonte: atlas
     Jardim Paulista:
-      compra_m2: 12454.0
+      compra_m2: 13856.0
       fonte: atlas
     Itaim Bibi:
-      compra_m2: 13989.0
+      compra_m2: 14289.0
       fonte: atlas
-  campinas:
-    Cambuí:
-      compra_m2: 7533.33
-      fonte: mediana_movel
-      amostras: 46
-      faixa:
-      - 6129.03
-      - 14571.18
-  piracicaba:
-    São Dimas:
-      compra_m2: 8684.21
-      fonte: mediana_movel
-      amostras: 30
-      faixa:
-      - 3500.0
-      - 11842.11
-    Cidade Alta:
-      compra_m2: 4393.94
-      fonte: mediana_movel
-      amostras: 30
-      faixa:
-      - 3522.73
-      - 7727.27
-    Nova Piracicaba:
-      compra_m2: 4805.19
-      fonte: mediana_movel
-      amostras: 275
-      faixa:
-      - 2462.12
-      - 8333.33
-    Centro:
-      compra_m2: 3689.32
-      fonte: mediana_movel
-      amostras: 111
-      faixa:
-      - 2606.06
-      - 10588.24
-divergencias:
-- regiao: piracicaba
-  bairro: São Dimas
-  valor_config: 6500
-  valor_novo: 8684.21
-  diff_pct: 33.6
-  fonte: mediana_movel
-- regiao: piracicaba
-  bairro: Cidade Alta
-  valor_config: 6000
-  valor_novo: 4393.94
-  diff_pct: -26.8
-  fonte: mediana_movel
-- regiao: piracicaba
-  bairro: Centro
-  valor_config: 5500
-  valor_novo: 3689.32
-  diff_pct: -32.9
-  fonte: mediana_movel
+divergencias: []
