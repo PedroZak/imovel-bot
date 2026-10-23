@@ -135,6 +135,9 @@ utils/
                             scorer e histórico, pra não dessincronizar.
   historico.py             grava TODO listing coletado (aprovado ou não) no
                             SQLite, base da mediana móvel de calibragem.
+  memoria.py               memória de anúncios entre rodadas (7 dias) —
+                            anúncio que não veio nesta coleta volta à lista
+                            marcado "visto há N". Ver "Bugs corrigidos" #28.
   geo.py                   haversine + geocoding (Nominatim) + cache,
                             3 níveis de fallback pra walkability.
   text.py                  parsing de número/área/quartos + sanitização de
@@ -815,6 +818,70 @@ cronológica:
     chaves de localStorage (`imovel-bot-pat`, `-tier`, `-tema`) —
     renomear as chaves apagaria o PAT que o usuário já salvou no
     celular. O repositório no GitHub também continua `imovel-bot`.
+
+28. **Instabilidade entre rodadas: memória de anúncios + painel de saúde
+    das fontes (23/10/2026)** — usuário percebeu que duas rodadas
+    seguidas traziam resultados diferentes ("o anúncio está lá, só não
+    estamos vendo"). Diagnóstico medido, não suposto:
+    - Experimento (ZAP de SP duas vezes seguidas, mesma config): só 41%
+      dos anúncios se repetem; nos bairros-alvo, 3 na rodada 1, 5 na 2,
+      **zero em comum**. QuintoAndar: 100% idêntico. O ZAP embaralha a
+      ordem e o bot lê só as 5 primeiras páginas da CIDADE inteira (o
+      filtro de bairro vem depois, no scorer) — quem entra no recorte é
+      parcialmente sorte.
+    - OLX toma HTTP 403 no GitHub Actions: nas 14 rodadas analisadas, a
+      OLX de SP capital trouxe 0 SEMPRE; em Campinas/Piracicaba trouxe
+      0/~45/~90 conforme a página em que o 403 caiu (scraper dá `break`
+      no primeiro erro, sem retry).
+    - O dashboard mostrava só a última rodada, então o que a rodada
+      seguinte não via simplesmente sumia.
+    Implementado (só isto; busca por bairro e catálogo de bairros ficam
+    pra depois, nessa ordem):
+    - **`utils/memoria.py`** + tabela `anuncios_memoria` no mesmo
+      `data/vistos.db` (que já persiste no Actions via actions/cache).
+      `mesclar()` grava os anúncios coletados e devolve frescos +
+      "recuperados": vistos nos últimos `DIAS_RETENCAO` (7, escolha do
+      usuário) que não vieram agora. Recuperados passam pelo scorer de
+      novo (config/referências atuais) e carregam
+      `visto_por_ultimo` (campo novo e opcional em `Listing` e
+      `LeilaoListing`; nunca é regravado na memória). Card mostra "🕒
+      Não apareceu nesta rodada · visto por último há N" + borda
+      tracejada. Escopo da memória = nome da região (mercado) ou
+      `"leilao"`. Mercado só guarda anúncio de bairro-alvo (o único que o
+      scorer pode aprovar). **Dedup por conteúdo (bairro+preço+área+
+      quartos arredondados) só entre recuperados e frescos** — sem isso a
+      memória duplicaria o card de todo imóvel repostado com ID novo (o
+      antigo ficaria até 7 dias ao lado do novo). Falha de banco devolve
+      só os frescos, nunca derruba a rodada.
+    - **Painel de saúde** (`dashboard._montar_saude`, `<details>` "📡
+      Fontes" no topo de cada tier): por região/fonte, quantos anúncios
+      vieram, se houve erro (ex: "bloqueada (HTTP 403) na pág. 2") e
+      quantos foram recuperados da memória. Resumo fica vermelho se
+      alguma fonte errou OU trouxe 0 sem erro (também suspeito). Como os
+      scrapers engolem falha HTTP (log + `break`) e devolvem lista
+      parcial, `main._coletar_fonte` captura os `logger.error` do logger
+      `"scrapers"` durante cada coleta — o retorno sozinho não revela
+      bloqueio. O painel vai DENTRO do HTML do tier, então fica no cache
+      por tier junto com os cards (rodar só Tier 3 não apaga o painel do
+      Mercado). Com 0 aprovados mas painel presente, o dashboard mostra o
+      layout completo (antes mostrava só "nenhum imóvel").
+    **Mudança de comportamento no Tier 3**: antes, nenhum leilão coletado
+    de nenhuma fonte fazia `rodar_tier3` sair SEM atualizar o dashboard;
+    agora segue e publica vazio + painel, pra mostrar o porquê (ex:
+    Resale bloqueada). A memória cobre o caso em que há histórico.
+    **Ressalvas conhecidas**: (1) leilão encerrado pode ficar até 7 dias
+    na lista — o selo "visto há N" é o aviso, confira sempre o edital;
+    (2) a primeira rodada após o deploy só alimenta a memória, o efeito
+    aparece da 2ª em diante; (3) rodar local (`testar.bat`) usa o
+    `data/vistos.db` local, memória separada da do GitHub; (4) a memória
+    NÃO resolve cobertura — só segura o que já foi visto. Quem resolve é
+    a busca por bairro (próximo passo).
+    Testado: módulo isolado (recuperação, repost, expiração em 7 dias,
+    LeilaoListing, falha de banco), fluxo completo `_coletar_e_pontuar` e
+    `rodar_tier3` com scrapers simulados (OLX 403 → nada sumiu, só os
+    ausentes vieram marcados, erro com a página), render mobile no modo
+    claro (modo escuro dos elementos novos não foi conferido — usam as
+    mesmas variáveis de cor dos demais).
 
 ## Backlog conhecido (não resolvido, com contexto)
 

@@ -30,11 +30,13 @@ import re
 import shutil
 import unicodedata
 import webbrowser
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 import yaml
+
+from utils.memoria import DIAS_RETENCAO
 
 if TYPE_CHECKING:
     from scorers.base import ScoreResult, LeilaoScoreResult
@@ -92,6 +94,11 @@ _CRITERIOS_LEILAO = {
 _FONTE_LEILAO_LABEL = {"caixa_leilao": "Caixa", "resale": "Resale"}
 _FONTE_LEILAO_EMOJI = {"caixa_leilao": "🏦", "resale": "🏷️"}
 
+# Prefixo que identifica um bloco de saúde dentro do HTML de um tier (que
+# fica no cache em disco) — usado pra saber se há algo a mostrar mesmo
+# quando nenhum imóvel foi aprovado.
+_MARCA_SAUDE = 'class="saude'
+
 
 # ── API pública ───────────────────────────────────────────────
 
@@ -100,6 +107,8 @@ def salvar_e_abrir(
     resultados_leilao: Optional[dict] = None,
     path: str = "data/dashboard.html",
     abrir: bool = True,
+    saude_mercado: Optional[list] = None,
+    saude_leilao: Optional[list] = None,
 ) -> str:
     """
     Gera o dashboard HTML, salva em `path` e abre no navegador padrão
@@ -112,10 +121,18 @@ def salvar_e_abrir(
     abas. Passar `None` (em vez de `{}`) pra um dos dois significa
     "esse tier não rodou agora" — reaproveita o cache da última rodada
     (ver docstring do módulo) em vez de mostrar a aba vazia.
+
+    `saude_mercado` / `saude_leilao`: lista de dicts por fonte
+    ({escopo, fonte, coletados, erro, recuperados}) — painel "Fontes" no
+    topo do tier. Só é usado quando o tier rodou agora; quando o tier vem
+    do cache, o painel da última rodada dele já está dentro do HTML salvo.
     """
     destino = Path(path)
     destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_text(_montar_html(resultados_mercado, resultados_leilao), encoding="utf-8")
+    destino.write_text(
+        _montar_html(resultados_mercado, resultados_leilao, saude_mercado, saude_leilao),
+        encoding="utf-8",
+    )
 
     caminho_absoluto = str(destino.resolve())
 
@@ -162,20 +179,24 @@ def _abrir_no_chrome(url: str) -> bool:
 
 # ── Montagem do documento ────────────────────────────────────────
 
-def _montar_html(resultados_mercado: Optional[dict], resultados_leilao: Optional[dict]) -> str:
+def _montar_html(
+    resultados_mercado: Optional[dict], resultados_leilao: Optional[dict],
+    saude_mercado: Optional[list] = None, saude_leilao: Optional[list] = None,
+) -> str:
     gerado_em = _fmt_data_curta(datetime.now())
     calibracao = _ler_data_calibragem()
 
     mercado_html, mercado_qtd = _preparar_tier(
         resultados_mercado, _CACHE_MERCADO, _montar_card_mercado,
-        "🔍 Nenhum imóvel de mercado aprovado ainda.",
+        "🔍 Nenhum imóvel de mercado aprovado ainda.", saude_mercado,
     )
     leilao_html, leilao_qtd = _preparar_tier(
         resultados_leilao, _CACHE_LEILAO, _montar_card_leilao,
-        "🔍 Nenhum imóvel de leilão aprovado ainda.",
+        "🔍 Nenhum imóvel de leilão aprovado ainda.", saude_leilao,
     )
 
-    if mercado_qtd == 0 and leilao_qtd == 0:
+    tem_saude = _MARCA_SAUDE in mercado_html or _MARCA_SAUDE in leilao_html
+    if mercado_qtd == 0 and leilao_qtd == 0 and not tem_saude:
         corpo = '<div class="vazio"><p>🔍 Nenhum imóvel aprovado ainda.</p></div>'
     else:
         tiers = [("mercado", "🏠 Mercado", mercado_qtd), ("leilao", "🏦 Leilão", leilao_qtd)]
@@ -284,6 +305,7 @@ def _ler_data_calibragem(path: str = REFERENCIAS_CALIBRADAS_PATH) -> str:
 
 def _preparar_tier(
     resultados: Optional[dict], cache_path: str, montar_card_fn, msg_vazio: str,
+    saude: Optional[list] = None,
 ) -> tuple:
     """
     Gera o HTML (sub-abas + cards) de um tier a partir de `resultados`
@@ -295,7 +317,7 @@ def _preparar_tier(
     if resultados is not None:
         grupos = {nome: r for nome, r in resultados.items() if r}
         total = sum(len(r) for r in grupos.values())
-        html_tier = (
+        html_tier = _montar_saude(saude) + (
             _montar_subtabs(grupos, montar_card_fn) if grupos
             else f'<div class="vazio"><p>{_esc(msg_vazio)}</p></div>'
         )
@@ -313,6 +335,81 @@ def _preparar_tier(
     except (FileNotFoundError, ValueError) as e:
         logger.debug(f"Sem cache prévio pra {cache_path} ({e}) — mostrando vazio")
         return f'<div class="vazio"><p>{_esc(msg_vazio)}</p></div>', 0
+
+
+def _montar_saude(saude: Optional[list]) -> str:
+    """
+    Painel "Fontes": quanto cada scraper trouxe nesta rodada, se foi
+    bloqueado/deu erro e quantos anúncios vieram da memória em vez da
+    coleta. Fechado por padrão; o resumo já avisa se algo deu errado —
+    inclusive "0 anúncios" sem erro, que também é suspeito.
+    """
+    if not saude:
+        return ""
+
+    com_problema = [i for i in saude if i.get("erro") or not i.get("coletados")]
+    if com_problema:
+        classe, resumo = "saude saude-alerta", f"⚠️ {len(com_problema)} fonte(s) com problema"
+    else:
+        classe, resumo = "saude saude-ok", "✅ todas as fontes responderam"
+
+    grupos: dict = {}
+    for item in saude:
+        grupos.setdefault(item["escopo"], []).append(item)
+
+    linhas = "".join(
+        f'<div class="saude-linha"><span class="saude-escopo">{_esc(escopo)}</span>'
+        f'<span class="saude-chips">{"".join(_chip_fonte(i) for i in itens)}</span></div>'
+        for escopo, itens in grupos.items()
+    )
+    return f"""<details class="{classe}">
+  <summary>📡 Fontes · {resumo}</summary>
+  <div class="saude-corpo">
+    {linhas}
+    <p class="saude-nota">Rodada de {_fmt_data_curta(datetime.now())}. Anúncio que não aparece numa
+    rodada fica até {DIAS_RETENCAO} dias na lista, marcado com "visto há …"
+    (a ordem dos portais muda a cada consulta e a OLX às vezes bloqueia).</p>
+  </div>
+</details>"""
+
+
+def _chip_fonte(item: dict) -> str:
+    problema = bool(item.get("erro")) or not item.get("coletados")
+    detalhes = []
+    if item.get("erro"):
+        detalhes.append(_esc(item["erro"]))
+    elif not item.get("coletados"):
+        detalhes.append("sem resultados")
+    if item.get("recuperados"):
+        detalhes.append(f'+{item["recuperados"]} da memória')
+    extra = f' <small>{" · ".join(detalhes)}</small>' if detalhes else ""
+    return (
+        f'<span class="chip {"chip-erro" if problema else "chip-ok"}">'
+        f'{"⚠️ " if problema else ""}{_esc(item["fonte"])} {item.get("coletados", 0)}{extra}</span>'
+    )
+
+
+def _fmt_visto_ha(iso: str) -> str:
+    """'2026-10-21T12:00:00+00:00' -> 'há 2 d' / 'há 5 h' / 'há 20 min'."""
+    try:
+        seg = (datetime.now(timezone.utc) - datetime.fromisoformat(iso)).total_seconds()
+    except (TypeError, ValueError):
+        return ""
+    if seg < 3600:
+        return f"há {max(1, int(seg // 60))} min"
+    if seg < 86400:
+        return f"há {int(seg // 3600)} h"
+    return f"há {int(seg // 86400)} d"
+
+
+def _montar_visto(listing) -> str:
+    """Selo do card recuperado da memória (utils/memoria.py); vazio nos frescos."""
+    if not getattr(listing, "visto_por_ultimo", None):
+        return ""
+    return (
+        f'<div class="card-visto">🕒 Não apareceu nesta rodada · visto por último '
+        f'{_fmt_visto_ha(listing.visto_por_ultimo)}</div>'
+    )
 
 
 def _montar_subtabs(grupos: dict, montar_card_fn) -> str:
@@ -401,7 +498,7 @@ def _montar_card_mercado(r: "ScoreResult") -> str:
     justificativas_html = f'<ul class="justificativas">{just_html}</ul>' if just_html else ""
     detalhes_html = _montar_breakdown(r.breakdown) + justificativas_html + _montar_flip(r)
 
-    return f"""<article class="card" data-score="{r.score}" data-preco="{l.preco or ''}" \
+    return f"""<article class="card{' card-antigo' if l.visto_por_ultimo else ''}" data-score="{r.score}" data-preco="{l.preco or ''}" \
 data-area="{l.area or ''}" data-precom2="{l.preco_m2 or ''}">
   <div class="card-foto">
     {foto_html}
@@ -412,6 +509,7 @@ data-area="{l.area or ''}" data-precom2="{l.preco_m2 or ''}">
     <div class="card-preco">{_fmt_brl(l.preco)}</div>
     <div class="card-titulo">{_esc(l.titulo)}</div>
     <div class="card-local">📍 {_esc(l.bairro)}, {_esc(l.cidade)}</div>
+    {_montar_visto(l)}
     <div class="card-stats">
       <span>📐 {_fmt_m2(l.area)}</span>
       <span>🛏 {l.quartos if l.quartos is not None else '?'}q</span>
@@ -531,7 +629,7 @@ def _montar_card_leilao(r: "LeilaoScoreResult") -> str:
     alertas_bloco = f'<ul class="alertas">{alertas_html}</ul>' if alertas_html else ""
     detalhes_html = _montar_breakdown(r.breakdown, _CRITERIOS_LEILAO) + justificativas_html
 
-    return f"""<article class="card" data-score="{r.score}" data-preco="{l.preco or ''}" \
+    return f"""<article class="card{' card-antigo' if l.visto_por_ultimo else ''}" data-score="{r.score}" data-preco="{l.preco or ''}" \
 data-area="{l.area or ''}" data-precom2="">
   <div class="card-foto">
     {foto_html}
@@ -542,6 +640,7 @@ data-area="{l.area or ''}" data-precom2="">
     <div class="card-preco">{_fmt_brl(l.preco)} <span class="fonte-badge">{_esc(fonte_label)}</span></div>
     <div class="card-titulo">{_esc(l.titulo)}</div>
     <div class="card-local">📍 {_esc(l.bairro)}, {_esc(l.cidade)}</div>
+    {_montar_visto(l)}
     <div class="card-stats">
       <span>📐 {_fmt_m2(l.area)}</span>
       <span>🛏 {l.quartos if l.quartos is not None else '?'}q</span>
@@ -698,11 +797,34 @@ main { padding: 1.25rem 1.5rem 6rem; max-width: 1400px; margin: 0 auto; }
            background: var(--card-bg); cursor: pointer; font-size: 0.9rem; color: var(--fg); }
 .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
+/* Painel de saúde das fontes (topo de cada tier) */
+.saude { margin-bottom: 1rem; border: 1px solid var(--border); border-radius: 10px;
+         background: var(--card-bg); font-size: 0.82rem; }
+.saude summary { list-style: none; cursor: pointer; padding: 0.55rem 0.9rem; font-weight: 600;
+                 color: var(--muted); display: flex; align-items: center; }
+.saude summary::-webkit-details-marker { display: none; }
+.saude summary::after { content: "▾"; margin-left: auto; }
+.saude[open] summary::after { content: "▴"; }
+.saude-alerta { border-color: var(--danger); }
+.saude-alerta summary { color: var(--danger); }
+.saude-corpo { padding: 0.2rem 0.9rem 0.8rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.saude-linha { display: flex; flex-direction: column; gap: 0.3rem; }
+.saude-escopo { font-weight: 600; color: var(--fg); }
+.saude-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.chip { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.78rem;
+        border: 1px solid var(--border); background: var(--bg); color: var(--fg); }
+.chip small { color: var(--muted); font-size: 0.74rem; }
+.chip-erro { border-color: var(--danger); background: var(--flip-ruim-bg); }
+.chip-erro small { color: var(--danger); }
+.saude-nota { margin: 0; color: var(--muted); font-size: 0.76rem; line-height: 1.45; }
+
 .tab-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
              gap: 1rem; }
 
 .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
         overflow: hidden; display: flex; flex-direction: column; }
+.card-antigo { border-style: dashed; }
+.card-visto { color: var(--tier-medio); font-size: 0.8rem; font-weight: 600; }
 .card-foto { position: relative; }
 .card-foto img { width: 100%; height: 170px; object-fit: cover; display: block; }
 .card-foto .sem-foto { width: 100%; height: 170px; display: flex; align-items: center;

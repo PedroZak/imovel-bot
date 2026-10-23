@@ -41,6 +41,11 @@ class Listing:
     fotos:          list           = field(default_factory=list)
     dias_publicado: Optional[int]  = None
 
+    # Preenchido só pra anúncio recuperado da memória (utils/memoria.py):
+    # ISO UTC da última vez que um scraper realmente o viu. None = visto
+    # nesta rodada. Nunca é gravado de volta na memória.
+    visto_por_ultimo: Optional[str] = None
+
     # Computado
     preco_m2: Optional[float] = field(init=False, default=None)
 
@@ -79,6 +84,9 @@ class LeilaoListing:
 
     # Meta
     fonte: str = "caixa_leilao"
+
+    # Mesmo significado de Listing.visto_por_ultimo (ver utils/memoria.py).
+    visto_por_ultimo: Optional[str] = None
 
     # Computado
     desconto_pct: float = field(init=False, default=0.0)

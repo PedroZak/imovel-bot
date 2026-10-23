@@ -11,12 +11,13 @@ Uso:
   python main.py --tier 3       → Tier 3 (leilão)
 """
 
-import argparse, copy, logging, os, yaml
+import argparse, copy, logging, os, re, yaml
 
 from scrapers  import olx, zap, quintoandar
+from scrapers.base import Listing, LeilaoListing
 from scorers   import mercado as scorer_mercado
 from notifier  import dashboard
-from utils     import historico
+from utils     import historico, memoria
 from utils.bairro import normalizar
 
 logging.basicConfig(
@@ -79,12 +80,64 @@ def _mesclar_calibragem(cfg: dict, path: str = REFERENCIAS_CALIBRADAS_PATH) -> d
     return cfg
 
 
+# ── Coleta com painel de saúde ────────────────────────────────
+
+class _CapturaErros(logging.Handler):
+    """Guarda as mensagens ERROR dos scrapers durante uma coleta."""
+    def __init__(self):
+        super().__init__(level=logging.ERROR)
+        self.mensagens: list = []
+
+    def emit(self, record):
+        self.mensagens.append(record.getMessage())
+
+
+def _resumir_erro(msg: str) -> str:
+    """'OLX erro p.2: HTTP Error 403: ' -> 'bloqueada (HTTP 403) na pág. 2'."""
+    cod = re.search(r"HTTP(?: Error)? (\d{3})", msg)
+    pag = re.search(r"(?:p\.|página=)(\d+)", msg)
+    if cod and cod.group(1) == "403":
+        base = "bloqueada (HTTP 403)"
+    elif cod:
+        base = f"erro HTTP {cod.group(1)}"
+    else:
+        base = "erro de coleta"
+    return base + (f" na pág. {pag.group(1)}" if pag else "")
+
+
+def _coletar_fonte(nome: str, fn, rotulo: str = "", *args, **kwargs) -> tuple:
+    """
+    Roda um scraper e devolve (listings, erro). `erro` é um texto curto se o
+    scraper registrou ERROR ou levantou exceção, senão None.
+
+    Os scrapers engolem falha HTTP (log + break) e devolvem a lista parcial,
+    então o retorno sozinho não revela bloqueio — por isso o handler no
+    logger "scrapers", que recebe os logs de todos os scrapers.* durante a
+    chamada. Alimenta o painel de saúde do dashboard.
+    """
+    captura = _CapturaErros()
+    log_scrapers = logging.getLogger("scrapers")
+    log_scrapers.addHandler(captura)
+    novos, erro = [], None
+    try:
+        novos = fn(*args, **kwargs)
+    except Exception as e:
+        logger.error(f"{nome} falhou{f' [{rotulo}]' if rotulo else ''}: {e}")
+        erro = f"erro de coleta ({type(e).__name__})"
+    finally:
+        log_scrapers.removeHandler(captura)
+    if erro is None and captura.mensagens:
+        erro = _resumir_erro(captura.mensagens[0])
+    return novos, erro
+
+
 # ── Tier 1 — Mercado ─────────────────────────────────────────
 
 def rodar_tier1(cfg: dict):
     logger.info("═══ TIER 1 — Mercado ═══")
     mc = cfg.get("mercado", {})
     resultados_por_regiao: dict = {}
+    saude: list = []
 
     if mc.get("multi_regiao") and mc.get("regions"):
         total = 0
@@ -92,19 +145,22 @@ def rodar_tier1(cfg: dict):
             nome = info.get("display_name", chave)
             logger.info(f"--- Região: {nome} ---")
             cfg_regiao = _construir_config_regiao(cfg, info)
-            aprovados = _coletar_e_pontuar(cfg_regiao, label=nome)
+            aprovados, saude_regiao = _coletar_e_pontuar(cfg_regiao, label=nome)
             total += len(aprovados)
             resultados_por_regiao[nome] = aprovados
+            saude.extend(saude_regiao)
         logger.info(f"Tier 1 total (todas as regiões): {total} aprovados")
     else:
         nome = cfg.get("mercado", {}).get("cidade", "Resultados")
-        resultados_por_regiao[nome] = _coletar_e_pontuar(cfg)
+        resultados_por_regiao[nome], saude = _coletar_e_pontuar(cfg)
 
     # Dashboard local (uma aba por cidade, cards por aprovado) — nunca
     # pode derrubar a rodada de produção; falha aqui é só um warning,
     # não interrompe nada.
     try:
-        caminho = dashboard.salvar_e_abrir(resultados_mercado=resultados_por_regiao)
+        caminho = dashboard.salvar_e_abrir(
+            resultados_mercado=resultados_por_regiao, saude_mercado=saude,
+        )
         logger.info(f"📊 Dashboard: {caminho}")
     except Exception as e:
         logger.warning(f"Falha ao gerar dashboard (não crítico): {e}")
@@ -141,26 +197,30 @@ def _viva_real_aplicavel(cfg: dict) -> bool:
     return slug_zap in (None, "sp+sao-paulo")
 
 
-def _coletar_e_pontuar(cfg: dict, label: str = "") -> list:
-    """Coleta OLX+ZAP+QuintoAndar(+VivaReal), pontua e retorna os aprovados."""
-    db = cfg["db_path"]
+def _coletar_e_pontuar(cfg: dict, label: str = "") -> tuple:
+    """
+    Coleta OLX+ZAP+QuintoAndar(+VivaReal), junta com a memória das últimas
+    rodadas (utils/memoria.py), pontua e retorna (aprovados, saude) — `saude`
+    é a lista por fonte que alimenta o painel de saúde do dashboard.
+    """
+    db     = cfg["db_path"]
+    escopo = label or cfg.get("mercado", {}).get("cidade", "Resultados")
 
     fontes = [
-        ("OLX", olx.buscar, {"cfg": cfg}),
-        ("ZAP", zap.buscar, {"cfg": cfg, "portal": "ZAP"}),
-        ("QuintoAndar", quintoandar.buscar, {"cfg": cfg}),
+        ("OLX",         "olx",         olx.buscar,         {"cfg": cfg}),
+        ("ZAP",         "zap",         zap.buscar,         {"cfg": cfg, "portal": "ZAP"}),
+        ("QuintoAndar", "quintoandar", quintoandar.buscar, {"cfg": cfg}),
     ]
     if _viva_real_aplicavel(cfg):
-        fontes.append(("VivaReal", zap.buscar, {"cfg": cfg, "portal": "VIVA_REAL"}))
+        fontes.append(("VivaReal", "vivareal", zap.buscar, {"cfg": cfg, "portal": "VIVA_REAL"}))
 
-    listings = []
-    for nome, fn, kwargs in fontes:
-        try:
-            novos = fn(**kwargs)
-            listings.extend(novos)
-            logger.info(f"{nome}{f' [{label}]' if label else ''}: {len(novos)} listings coletados")
-        except Exception as e:
-            logger.error(f"{nome} falhou{f' [{label}]' if label else ''}: {e}")
+    listings, saude = [], []
+    for nome, chave, fn, kwargs in fontes:
+        novos, erro = _coletar_fonte(nome, fn, label, **kwargs)
+        listings.extend(novos)
+        logger.info(f"{nome}{f' [{label}]' if label else ''}: {len(novos)} listings coletados")
+        saude.append({"escopo": escopo, "fonte": nome, "chave": chave,
+                      "coletados": len(novos), "erro": erro, "recuperados": 0})
 
     # Grava TODO listing coletado (não só os aprovados) no histórico de
     # preços — é a base da mediana móvel usada por calibragem/calibrar.py
@@ -173,9 +233,18 @@ def _coletar_e_pontuar(cfg: dict, label: str = "") -> list:
     except Exception as e:
         logger.warning(f"Falha ao gravar histórico de preços (não crítico): {e}")
 
+    # Memória: anúncios vistos nos últimos 7 dias que não vieram agora
+    # (ordem embaralhada do ZAP, 403 da OLX...) voltam à lista, marcados.
+    # Depois do histórico de propósito: ele só deve ver anúncios frescos.
+    listings, recuperados = memoria.mesclar(
+        db, escopo, listings, Listing, refs=cfg.get("bairros_referencia", {}),
+    )
+    for item in saude:
+        item["recuperados"] = recuperados.get(item["chave"], 0)
+
     aprovados = scorer_mercado.filtrar_e_ordenar(listings, cfg)
     logger.info(f"⭐ {len(aprovados)} aprovados" + (f" [{label}]" if label else ""))
-    return aprovados
+    return aprovados, saude
 
 
 # ── Tier 3 — Leilão ─────────────────────────────────────────────
@@ -190,20 +259,28 @@ def rodar_tier3(cfg: dict):
         logger.error(f"Tier 3 indisponível — dependência faltando: {e}")
         return
 
-    fontes = [("Caixa", caixa_leilao.buscar), ("Resale", resale.buscar)]
+    db = cfg["db_path"]
+    fontes = [("Caixa", "caixa_leilao", caixa_leilao.buscar), ("Resale", "resale", resale.buscar)]
 
-    listings = []
-    for nome, fn in fontes:
-        try:
-            novos = fn(cfg)
-            listings.extend(novos)
-            logger.info(f"{nome}: {len(novos)} leilões coletados")
-        except Exception as e:
-            logger.error(f"{nome} falhou: {e}")
+    listings, saude = [], []
+    for nome, chave, fn in fontes:
+        novos, erro = _coletar_fonte(nome, fn, "", cfg)
+        listings.extend(novos)
+        logger.info(f"{nome}: {len(novos)} leilões coletados")
+        saude.append({"escopo": "Leilão", "fonte": nome, "chave": chave,
+                      "coletados": len(novos), "erro": erro, "recuperados": 0})
+
+    # Memória (ver utils/memoria.py): leilão que sumiu da coleta mas foi
+    # visto nos últimos 7 dias volta marcado — o card mostra "visto há N
+    # dias", então um leilão já encerrado não passa por ativo.
+    listings, recuperados = memoria.mesclar(db, "leilao", listings, LeilaoListing)
+    for item in saude:
+        item["recuperados"] = recuperados.get(item["chave"], 0)
 
     if not listings:
+        # Antes isso saía sem atualizar o dashboard; agora segue, pra o painel
+        # de saúde mostrar POR QUE veio vazio (ex: Resale bloqueada).
         logger.warning("Tier 3: nenhum leilão coletado de nenhuma fonte")
-        return
 
     aprovados = scorer_leilao.filtrar_e_ordenar(listings, cfg)
     logger.info(f"⭐ {len(aprovados)} aprovados")
@@ -219,7 +296,9 @@ def rodar_tier3(cfg: dict):
     )
 
     try:
-        caminho = dashboard.salvar_e_abrir(resultados_leilao=resultados_por_cidade)
+        caminho = dashboard.salvar_e_abrir(
+            resultados_leilao=resultados_por_cidade, saude_leilao=saude,
+        )
         logger.info(f"📊 Dashboard: {caminho}")
     except Exception as e:
         logger.warning(f"Falha ao gerar dashboard (não crítico): {e}")
@@ -253,6 +332,7 @@ def main():
 
     cfg = carregar_config()
     historico.inicializar(cfg["db_path"])
+    memoria.inicializar(cfg["db_path"])
 
     if args.tier == 1:
         rodar_tier1(cfg)
