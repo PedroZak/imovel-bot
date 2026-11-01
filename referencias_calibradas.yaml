@@ -1,25 +1,28 @@
 # Gerado automaticamente por calibragem/calibrar.py — não editar à mão.
 # main.py mescla este arquivo com config.yaml na inicialização.
 
-gerado_em: '2026-10-01T12:43:53.898787+00:00'
+gerado_em: '2026-11-01T12:53:20.911231+00:00'
 regions:
   sp_capital:
+    Vila Mariana:
+      compra_m2: 12010.0
+      fonte: atlas
     Paraíso:
-      compra_m2: 11620.0
+      compra_m2: 12010.0
       fonte: atlas
     Vila Clementino:
-      compra_m2: 11620.0
+      compra_m2: 12010.0
       fonte: atlas
     Moema:
-      compra_m2: 13953.0
+      compra_m2: 14127.0
       fonte: atlas
     Pinheiros:
-      compra_m2: 13586.0
+      compra_m2: 13335.0
       fonte: atlas
     Jardim Paulista:
-      compra_m2: 13856.0
+      compra_m2: 13800.0
       fonte: atlas
     Itaim Bibi:
-      compra_m2: 14289.0
+      compra_m2: 14362.0
       fonte: atlas
 divergencias: []
